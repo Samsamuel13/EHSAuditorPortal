@@ -1,0 +1,447 @@
+.page-wide { max-width: 1400px; }
+
+.toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.view-toggle {
+    display: inline-flex;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.btn-toggle {
+    border: none;
+    background: white;
+    padding: 8px 14px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    color: var(--text);
+}
+
+.btn-toggle.active {
+    background: var(--brand);
+    color: white;
+}
+
+.filter-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.filter-bar select,
+.filter-bar input[type="text"] {
+    padding: 8px 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    font-size: 0.85rem;
+}
+
+.filter-bar input[type="text"] {
+    min-width: 200px;
+    flex: 1;
+}
+
+.btn-ghost-light {
+    background: transparent;
+    border: 1px solid #d1d5db;
+    color: var(--text);
+}
+
+.hidden { display: none !important; }
+
+/* --- Legend chips (auditor colors) --- */
+#auditor-legend .legend-item {
+    background: #f3f4f6;
+    padding: 3px 10px;
+    border-radius: 999px;
+}
+
+/* --- Grid / sheet view --- */
+.grid-nav-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    margin-bottom: 10px;
+}
+
+.grid-month-label {
+    font-weight: 600;
+    min-width: 140px;
+    text-align: center;
+}
+
+.grid-scroll {
+    overflow: auto;
+    max-height: 72vh; /* bounded height is required for position:sticky to have
+                         something real to stick within — without this, the
+                         whole page scrolls instead of the grid, and the
+                         sticky header row silently does nothing */
+    background: white;
+    border-radius: var(--radius);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+
+.grid-table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 0.8rem;
+}
+
+.grid-table th,
+.grid-table td {
+    border: 1px solid #e5e7eb;
+    padding: 6px 8px;
+    white-space: nowrap;
+    vertical-align: top;
+}
+
+.grid-table thead th {
+    position: sticky;
+    top: 0;
+    background: #f9fafb;
+    z-index: 2;
+}
+
+.grid-table td:first-child,
+.grid-table th:first-child {
+    position: sticky;
+    left: 0;
+    background: #f9fafb;
+    z-index: 1;
+    font-weight: 600;
+}
+
+/* The top-left corner cell is sticky on BOTH axes at once — needs to sit
+   above everything else so it doesn't get visually overlapped while
+   scrolling either direction. */
+.grid-table thead th:first-child {
+    z-index: 3;
+}
+
+.grid-table td.weekend-cell { background: var(--weekend-bg); }
+.grid-table td.holiday-cell { background: var(--holiday-bg); }
+
+.grid-cell {
+    display: block;
+    width: 100%;
+    min-width: 90px;
+    min-height: 32px;
+    font-size: 0.75rem;
+    padding: 2px;
+}
+
+.grid-chip {
+    display: block;
+    border-radius: 4px;
+    padding: 1px 5px;
+    margin-bottom: 2px;
+    color: white;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+}
+
+.grid-add-btn {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 0.72rem;
+    color: #9ca3af;
+    padding: 1px 3px;
+}
+
+.grid-add-btn:hover {
+    color: var(--brand-accent);
+    text-decoration: underline;
+}
+
+.grid-avail-dot {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    margin-right: 4px;
+}
+
+/* --- Wider modal for the assignment form --- */
+.modal-wide { max-width: 560px; max-height: 88vh; overflow-y: auto; }
+.modal-narrow { max-width: 360px; }
+
+.modal-row {
+    display: flex;
+    gap: 16px;
+}
+.modal-row > div { flex: 1; }
+
+@media (max-width: 640px) {
+    .modal-row { flex-direction: column; gap: 0; }
+}
+
+.label-hint {
+    font-weight: normal;
+    color: var(--muted);
+    font-size: 0.8em;
+}
+
+.checkbox-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.checkbox-grid-scroll {
+    max-height: 180px;
+    overflow-y: auto;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 8px;
+}
+
+.chip-checkbox {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    border: 1px solid #d1d5db;
+    border-radius: 999px;
+    padding: 4px 10px;
+    font-size: 0.8rem;
+    cursor: pointer;
+}
+
+.chip-checkbox.not-approved {
+    border-style: dashed;
+    opacity: 0.85;
+}
+
+.chip-checkbox.caution {
+    border-color: #9ca3af;
+    background: #f3f4f6;
+}
+
+.conflict-badge.caution-badge {
+    background: #6b7280;
+    color: white;
+}
+
+.chip-checkbox.selected {
+    border-color: transparent;
+    color: white;
+    font-weight: 600;
+}
+
+.chip-checkbox .check-mark {
+    font-weight: bold;
+}
+
+.conflict-badge {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 1px 7px;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: white;
+    background: var(--unavailable);
+}
+
+.conflict-badge.tentative-badge {
+    background: var(--tentative);
+    color: #3a2a06;
+}
+
+.locked-auditor-summary {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 0.85rem;
+}
+
+.locked-auditor-summary .chip-dot {
+    width: 12px;
+    height: 12px;
+}
+
+.locked-auditor-summary button {
+    margin-left: auto;
+    background: none;
+    border: none;
+    color: var(--brand-accent);
+    cursor: pointer;
+    font-size: 0.8rem;
+    text-decoration: underline;
+}
+
+.chip-checkbox.warn {
+    border-color: var(--tentative);
+    background: var(--tentative-bg);
+}
+
+.chip-checkbox.blocked {
+    border-color: var(--unavailable);
+    background: var(--unavailable-bg);
+}
+
+.chip-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+/* --- Autocomplete --- */
+.autocomplete { position: relative; }
+
+.autocomplete-list {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: white;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    max-height: 180px;
+    overflow-y: auto;
+    z-index: 20;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.autocomplete-item {
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 0.85rem;
+}
+
+.autocomplete-item:hover,
+.autocomplete-item.active {
+    background: #f3f4f6;
+}
+
+.autocomplete-item.add-new {
+    color: var(--brand-accent);
+    font-weight: 600;
+}
+
+/* --- Modal warnings banner --- */
+.modal-warnings {
+    background: var(--tentative-bg);
+    border: 1px solid var(--tentative);
+    color: #7a5a10;
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 0.8rem;
+    margin-top: 12px;
+}
+
+.modal-actions-split {
+    justify-content: space-between !important;
+}
+
+.btn-danger {
+    background: var(--unavailable);
+    color: white;
+}
+
+/* --- Per-audit timeline --- */
+.timeline-list {
+    margin: 16px 0;
+    max-height: 320px;
+    overflow-y: auto;
+}
+
+.timeline-item {
+    position: relative;
+    padding-left: 20px;
+    padding-bottom: 16px;
+    border-left: 2px solid #e5e7eb;
+    margin-left: 6px;
+}
+
+.timeline-item:last-child {
+    border-left-color: transparent;
+    padding-bottom: 0;
+}
+
+.timeline-item::before {
+    content: '';
+    position: absolute;
+    left: -7px;
+    top: 2px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--brand-accent);
+    border: 2px solid white;
+}
+
+.timeline-action {
+    font-weight: 600;
+    font-size: 0.88rem;
+}
+
+.timeline-meta {
+    font-size: 0.78rem;
+    color: var(--muted);
+}
+
+/* --- Day agenda list --- */
+.day-agenda-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid #f1f2f4;
+    cursor: pointer;
+}
+.day-agenda-item:last-child { border-bottom: none; }
+.day-agenda-item:hover { background: #f9fafb; }
+
+/* --- Overdue indicator --- */
+.overdue-badge {
+    display: inline-block;
+    margin-left: 4px;
+    padding: 0 6px;
+    border-radius: 999px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: white;
+    background: #b91c1c;
+    vertical-align: middle;
+}
+
+.fc-event.audit-overdue {
+    border-width: 2px;
+    box-shadow: 0 0 0 1px #b91c1c inset;
+}
+
+.grid-chip.chip-overdue {
+    box-shadow: 0 0 0 2px #b91c1c inset;
+}
+
+/* --- Cancelled audits (this class was referenced in JS but never actually
+     styled before — a real gap, now fixed) --- */
+.fc-event.audit-cancelled {
+    opacity: 0.55;
+    text-decoration: line-through;
+}
+.grid-chip.chip-cancelled {
+    opacity: 0.55;
+    text-decoration: line-through;
+}

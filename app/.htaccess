@@ -1,0 +1,7 @@
+# Deny direct web access to files that should only ever be included by PHP.
+<FilesMatch "^config\.php$">
+    Require all denied
+</FilesMatch>
+
+# Never show directory listings.
+Options -Indexes

@@ -1,0 +1,236 @@
+:root {
+    --available: #2e7d5b;
+    --available-bg: #e5f3ec;
+    --unavailable: #c0392b;
+    --unavailable-bg: #fceceb;
+    --tentative: #b9821f;
+    --tentative-bg: #fbf1de;
+    --holiday-bg: #fdf1d6;
+    --weekend-bg: #eef1f5;
+    --selected-outline: #3788d8;
+}
+
+.page-hint {
+    color: var(--muted);
+    font-size: 0.9rem;
+    max-width: 640px;
+}
+
+kbd {
+    background: #eef0f2;
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-size: 0.85em;
+    font-family: inherit;
+}
+
+/* --- Legend --- */
+.legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin: 12px 0 20px;
+    font-size: 0.85rem;
+    color: var(--text);
+}
+
+.legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.dot-available   { background: var(--available); }
+.dot-unavailable { background: var(--unavailable); }
+.dot-tentative   { background: var(--tentative); }
+.dot-holiday     { background: var(--holiday-bg); border: 1px solid #e0b34d; }
+
+.overdue-badge {
+    display: inline-block;
+    margin-left: 4px;
+    padding: 0 6px;
+    border-radius: 999px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: white;
+    background: #b91c1c;
+    vertical-align: middle;
+}
+.dot-weekend     { background: var(--weekend-bg); border: 1px solid #c7ccd4; }
+
+/* --- FullCalendar day states --- */
+#calendar {
+    background: white;
+    border-radius: var(--radius);
+    padding: 12px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+
+.fc-day-weekend-custom {
+    background: var(--weekend-bg) !important;
+}
+
+.fc-day-holiday {
+    background: var(--holiday-bg) !important;
+}
+
+.fc-day-selected {
+    outline: 2px solid var(--selected-outline);
+    outline-offset: -2px;
+}
+
+.fc-event.avail-available   { background: var(--available-bg);   border-color: var(--available); }
+.fc-event.avail-unavailable { background: var(--unavailable-bg); border-color: var(--unavailable); }
+.fc-event.avail-tentative   { background: var(--tentative-bg);   border-color: var(--tentative); }
+
+/* FullCalendar's own default styling sets event text to white; override it
+   here so it stays legible against our light status-colored backgrounds. */
+.fc-event, .fc-event-main, .fc-event-main-frame, .fc-event-title {
+    color: #000 !important;
+}
+
+.fc-event {
+    font-size: 0.75rem;
+    padding: 1px 4px;
+    cursor: pointer;
+}
+
+/* --- Selection toolbar --- */
+.selection-bar {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--brand);
+    color: white;
+    padding: 10px 16px;
+    border-radius: 999px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+    z-index: 50;
+}
+
+.selection-bar.hidden { display: none; }
+
+.btn-small { padding: 6px 12px; font-size: 0.85rem; width: auto; margin: 0; }
+.btn-ghost { background: transparent; color: white; border: 1px solid rgba(255,255,255,0.5); }
+
+/* --- Modal --- */
+.modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+}
+
+.modal-backdrop.hidden { display: none; }
+
+.modal {
+    background: white;
+    border-radius: var(--radius);
+    padding: 24px;
+    width: 100%;
+    max-width: 420px;
+}
+
+@media (max-width: 640px) {
+    .modal-backdrop {
+        align-items: flex-end;
+        padding: 0;
+    }
+
+    .modal, .modal-wide {
+        max-width: 100%;
+        max-height: 92vh;
+        border-radius: var(--radius) var(--radius) 0 0;
+        padding: 18px;
+    }
+}
+
+.modal h2 { margin-top: 0; }
+
+.modal-subtitle {
+    color: var(--muted);
+    font-size: 0.85rem;
+    margin-top: -8px;
+}
+
+.modal label {
+    display: block;
+    font-size: 0.85rem;
+    color: var(--muted);
+    margin: 16px 0 6px;
+}
+
+.segmented {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.segmented label {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 0.85rem;
+    color: var(--text);
+    cursor: pointer;
+    margin: 0;
+}
+
+.modal input[type="text"] {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+}
+
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 24px;
+}
+
+.modal .btn-ghost {
+    background: transparent;
+    color: var(--text);
+    border: 1px solid #d1d5db;
+}
+
+/* --- Toast --- */
+.toast {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: #1f2937;
+    color: white;
+    padding: 12px 18px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    z-index: 200;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+}
+
+.toast.error { background: var(--unavailable); }
+.toast.hidden { display: none; }
+
+@media (max-width: 600px) {
+    .legend { gap: 10px; font-size: 0.8rem; }
+    .selection-bar { flex-wrap: wrap; justify-content: center; text-align: center; }
+}
