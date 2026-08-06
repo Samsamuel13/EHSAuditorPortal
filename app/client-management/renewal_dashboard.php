@@ -38,6 +38,7 @@ $isSuperAdmin = $user['role'] === 'super_admin';
         <h1>Renewal Dashboard</h1>
 
         <div class="filter-bar">
+            <input type="text" id="filter-client-name" placeholder="Search client name...">
             <select id="filter-scheme-category">
                 <option value="">All scheme categories</option>
                 <option value="ISO">ISO</option>
@@ -88,7 +89,7 @@ $isSuperAdmin = $user['role'] === 'super_admin';
                     <th>Client</th>
                     <th>Scheme</th>
                     <th>Cert #</th>
-                    <th>Expiry</th>
+                    <th>Next Due</th>
                     <th>Status</th>
                     <th>Responsible</th>
                 </tr></thead>

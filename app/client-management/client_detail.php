@@ -102,8 +102,11 @@ $activity = $logStmt->fetchAll();
                     <th>Scheme</th>
                     <th>Cert #</th>
                     <th>Accreditation Body</th>
-                    <th>Cycle Stage</th>
-                    <th>Expiry</th>
+                    <th>1st Cert</th>
+                    <th>Surv. 1</th>
+                    <th>Surv. 2</th>
+                    <th>Recert.</th>
+                    <th>Next Due</th>
                     <th>Status</th>
                     <th></th>
                 </tr></thead>
@@ -231,11 +234,22 @@ $activity = $logStmt->fetchAll();
 
             <div class="modal-row">
                 <div>
-                    <label for="c-issue-date">Issue date</label>
+                    <label for="c-issue-date">1st Certification</label>
                     <input type="date" id="c-issue-date">
                 </div>
                 <div>
-                    <label for="c-expiry-date">Expiry date</label>
+                    <label for="c-surv1-date">Surveillance 1</label>
+                    <input type="date" id="c-surv1-date">
+                </div>
+            </div>
+
+            <div class="modal-row">
+                <div>
+                    <label for="c-surv2-date">Surveillance 2</label>
+                    <input type="date" id="c-surv2-date">
+                </div>
+                <div>
+                    <label for="c-expiry-date">Recertification</label>
                     <input type="date" id="c-expiry-date">
                 </div>
             </div>

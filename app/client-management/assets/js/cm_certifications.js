@@ -31,6 +31,12 @@ document.addEventListener('DOMContentLoaded', function () {
     const cycleLabels = { initial: 'Initial', surveillance_1: 'Surveillance 1', surveillance_2: 'Surveillance 2', recertification: 'Recertification' };
     const statusLabels = { pending: 'Pending', active: 'Active', expired: 'Expired', suspended: 'Suspended', withdrawn: 'Withdrawn' };
 
+    function nextDueCell(nextDue) {
+        if (!nextDue || !nextDue.date) return '—';
+        const cls = nextDue.overdue ? 'cm-badge-red' : 'cm-badge-amber';
+        return `${escapeHtml(nextDue.label)}: ${escapeHtml(nextDue.date)} <span class="badge ${cls}">${nextDue.overdue ? 'Overdue' : 'Upcoming'}</span>`;
+    }
+
     // --- Lookups ---
     function loadLookups() {
         return Promise.all([
@@ -65,8 +71,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 <td>${escapeHtml(c.scheme_name)}</td>
                 <td>${escapeHtml(c.certificate_number || '—')}</td>
                 <td>${escapeHtml(c.accreditation_body || '—')}</td>
-                <td>${cycleLabels[c.cycle_stage] || c.cycle_stage}</td>
-                <td>${escapeHtml(c.expiry_date || '—')} <span class="badge ${c.expiry_badge.class}">${escapeHtml(c.expiry_badge.label)}</span></td>
+                <td>${escapeHtml(c.issue_date || '—')}</td>
+                <td>${escapeHtml(c.surveillance_1_date || '—')}</td>
+                <td>${escapeHtml(c.surveillance_2_date || '—')}</td>
+                <td>${escapeHtml(c.expiry_date || '—')}</td>
+                <td>${nextDueCell(c.next_due)}</td>
                 <td><span class="badge cm-badge-${c.status === 'active' ? 'active' : (c.status === 'expired' ? 'blacklisted' : (c.status === 'pending' ? 'suspended' : c.status))}">${statusLabels[c.status] || c.status}</span></td>
                 <td class="mgmt-actions">
                     <button data-edit="${c.id}">Edit</button>
@@ -95,6 +104,8 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('c-cert-number').value = cert ? (cert.certificate_number || '') : '';
         document.getElementById('c-cycle-stage').value = cert ? cert.cycle_stage : 'initial';
         document.getElementById('c-issue-date').value = cert ? (cert.issue_date || '') : '';
+        document.getElementById('c-surv1-date').value = cert ? (cert.surveillance_1_date || '') : '';
+        document.getElementById('c-surv2-date').value = cert ? (cert.surveillance_2_date || '') : '';
         document.getElementById('c-expiry-date').value = cert ? (cert.expiry_date || '') : '';
         document.getElementById('c-status').value = cert ? cert.status : 'pending';
         document.getElementById('c-responsible-person').value = cert ? (cert.responsible_person_id || '') : '';
@@ -111,6 +122,8 @@ document.addEventListener('DOMContentLoaded', function () {
             certificate_number: document.getElementById('c-cert-number').value.trim(),
             cycle_stage: document.getElementById('c-cycle-stage').value,
             issue_date: document.getElementById('c-issue-date').value,
+            surveillance_1_date: document.getElementById('c-surv1-date').value,
+            surveillance_2_date: document.getElementById('c-surv2-date').value,
             expiry_date: document.getElementById('c-expiry-date').value,
             status: document.getElementById('c-status').value,
             responsible_person_id: document.getElementById('c-responsible-person').value ? Number(document.getElementById('c-responsible-person').value) : null,

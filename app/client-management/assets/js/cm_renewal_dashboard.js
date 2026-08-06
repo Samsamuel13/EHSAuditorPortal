@@ -41,6 +41,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function currentFilters() {
         return {
+            q: document.getElementById('filter-client-name').value.trim(),
             scheme_category: document.getElementById('filter-scheme-category').value,
             industry: document.getElementById('filter-industry').value.trim(),
             responsible_person_id: document.getElementById('filter-responsible').value,
@@ -86,7 +87,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 <td><a href="${window.EHS_BASE_URL}/client-management/client_detail.php?id=${c.client_id}">${escapeHtml(c.company_name)}</a></td>
                 <td>${escapeHtml(c.scheme_name)} (${escapeHtml(c.scheme_category)})</td>
                 <td>${escapeHtml(c.certificate_number || '—')}</td>
-                <td>${escapeHtml(c.expiry_date || '—')} <span class="badge ${c.expiry_badge.class}">${escapeHtml(c.expiry_badge.label)}</span></td>
+                <td>${escapeHtml(c.next_due.label || '—')}: ${escapeHtml(c.next_due.date || '—')} <span class="badge ${c.next_due.overdue ? 'cm-badge-red' : 'cm-badge-amber'}">${c.next_due.overdue ? 'Overdue' : 'Upcoming'}</span></td>
                 <td>${escapeHtml(c.status)}</td>
                 <td>${escapeHtml(c.responsible_person || '—')}</td>
             </tr>
@@ -101,11 +102,12 @@ document.addEventListener('DOMContentLoaded', function () {
         let t;
         return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
     }
-    ['filter-scheme-category', 'filter-industry', 'filter-responsible'].forEach(id => {
+    ['filter-client-name', 'filter-scheme-category', 'filter-industry', 'filter-responsible'].forEach(id => {
         const el = document.getElementById(id);
         el.addEventListener(el.tagName === 'SELECT' ? 'change' : 'input', debounce(load, 300));
     });
     document.getElementById('filter-clear').addEventListener('click', () => {
+        document.getElementById('filter-client-name').value = '';
         document.getElementById('filter-scheme-category').value = '';
         document.getElementById('filter-industry').value = '';
         document.getElementById('filter-responsible').value = '';

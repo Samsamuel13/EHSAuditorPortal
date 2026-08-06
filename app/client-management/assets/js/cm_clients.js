@@ -33,18 +33,23 @@ document.addEventListener('DOMContentLoaded', function () {
         return `<span class="badge cm-badge-${status}">${labels[status] || status}</span>`;
     }
 
-    // --- Scheme type filter dropdown ---
+    let schemeTypes = [];
+
+    // --- Scheme type filter dropdown (+ first-certification dropdown) ---
     function loadSchemeTypes() {
         fetch(API_BASE + '/scheme_types.php')
             .then(r => r.json())
             .then(data => {
+                schemeTypes = data.scheme_types || [];
                 const sel = document.getElementById('filter-scheme');
-                (data.scheme_types || []).forEach(st => {
+                schemeTypes.forEach(st => {
                     const opt = document.createElement('option');
                     opt.value = st.id;
                     opt.textContent = `${st.name} (${st.category})`;
                     sel.appendChild(opt);
                 });
+                const fcSel = document.getElementById('fc-scheme-type');
+                fcSel.innerHTML = schemeTypes.map(st => `<option value="${st.id}">${st.name} (${st.category})</option>`).join('');
             })
             .catch(() => {});
     }
@@ -158,12 +163,37 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('f-status').value = client ? client.status : 'active';
         document.getElementById('f-notes').value = client ? (client.notes || '') : '';
 
+        // First-certification section only makes sense when adding a brand
+        // new client — an existing client already manages certifications on
+        // its own detail page, so don't show a confusing duplicate control here.
+        const fcSection = document.getElementById('first-cert-section');
+        fcSection.classList.toggle('hidden', !!editingId);
+        document.getElementById('fc-enable').checked = false;
+        document.getElementById('fc-fields').classList.add('hidden');
+        document.getElementById('fc-accreditation-body').value = '';
+        document.getElementById('fc-cert-number').value = '';
+        document.getElementById('fc-status').value = 'active';
+        document.getElementById('fc-issue-date').value = '';
+        document.getElementById('fc-surv1-date').value = '';
+        document.getElementById('fc-surv2-date').value = '';
+        document.getElementById('fc-expiry-date').value = '';
+
         modalBackdrop.classList.remove('hidden');
     }
+
+    document.getElementById('fc-enable').addEventListener('change', function () {
+        document.getElementById('fc-fields').classList.toggle('hidden', !this.checked);
+    });
 
     document.getElementById('modal-save').addEventListener('click', function () {
         const companyName = document.getElementById('f-company-name').value.trim();
         if (!companyName) { showToast('Company name is required.', true); return; }
+
+        const wantsFirstCert = !editingId && document.getElementById('fc-enable').checked;
+        if (wantsFirstCert && !document.getElementById('fc-scheme-type').value) {
+            showToast('Choose a scheme type for the certification, or uncheck "Add a certification now".', true);
+            return;
+        }
 
         const payload = {
             company_name: companyName,
@@ -186,9 +216,48 @@ document.addEventListener('DOMContentLoaded', function () {
             .then(r => r.json().then(body => ({ ok: r.ok, body })))
             .then(({ ok, body }) => {
                 if (!ok) { showToast(body.error || 'Could not save client.', true); return; }
-                showToast(editingId ? 'Client updated.' : 'Client added.');
-                modalBackdrop.classList.add('hidden');
-                load();
+
+                if (!wantsFirstCert) {
+                    showToast(editingId ? 'Client updated.' : 'Client added.');
+                    modalBackdrop.classList.add('hidden');
+                    load();
+                    return;
+                }
+
+                // Client created — now create its first certification. The
+                // client already exists at this point even if this second
+                // call fails, so on failure we still refresh the list and
+                // point the user to the detail page to finish manually,
+                // rather than leaving them stuck on a half-succeeded modal.
+                const newClientId = body.client.id;
+                const certPayload = {
+                    cm_client_id: newClientId,
+                    cm_scheme_type_id: Number(document.getElementById('fc-scheme-type').value),
+                    accreditation_body: document.getElementById('fc-accreditation-body').value.trim(),
+                    certificate_number: document.getElementById('fc-cert-number').value.trim(),
+                    status: document.getElementById('fc-status').value,
+                    issue_date: document.getElementById('fc-issue-date').value,
+                    surveillance_1_date: document.getElementById('fc-surv1-date').value,
+                    surveillance_2_date: document.getElementById('fc-surv2-date').value,
+                    expiry_date: document.getElementById('fc-expiry-date').value,
+                };
+
+                fetch(`${API_BASE}/certifications.php`, { method: 'POST', headers: csrfHeaders(), body: JSON.stringify(certPayload) })
+                    .then(r => r.json().then(certBody => ({ ok: r.ok, certBody })))
+                    .then(({ ok: certOk, certBody }) => {
+                        modalBackdrop.classList.add('hidden');
+                        if (!certOk) {
+                            showToast(`Client added, but the certification couldn't be saved: ${certBody.error || 'unknown error'}. Add it from the client's page.`, true);
+                        } else {
+                            showToast('Client and certification added.');
+                        }
+                        load();
+                    })
+                    .catch(() => {
+                        modalBackdrop.classList.add('hidden');
+                        showToast('Client added, but the certification failed to save (network error). Add it from the client\'s page.', true);
+                        load();
+                    });
             })
             .catch(() => showToast('Network error — please try again.', true));
     });

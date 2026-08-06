@@ -32,7 +32,8 @@ const CM_IMPORT_MAX_BYTES = 8 * 1024 * 1024; // 8 MB
 const CM_IMPORT_HEADERS = [
     'company_name', 'uen_registration_no', 'industry_sector', 'address', 'contact_person',
     'contact_designation', 'phone', 'email', 'website', 'client_status',
-    'scheme_type_name', 'accreditation_body', 'certificate_number', 'issue_date', 'expiry_date',
+    'scheme_type_name', 'accreditation_body', 'certificate_number',
+    'issue_date', 'surveillance_1_date', 'surveillance_2_date', 'expiry_date',
     'cycle_stage', 'cert_status', 'responsible_person_name', 'notes',
 ];
 
@@ -186,11 +187,20 @@ function cm_validate_import_row(array $row, int $rowNum, PDO $db, array &$seenUe
     }
 
     $issue = cm_coerce_date_cell($row['issue_date'] ?? null);
+    $surv1 = cm_coerce_date_cell($row['surveillance_1_date'] ?? null);
+    $surv2 = cm_coerce_date_cell($row['surveillance_2_date'] ?? null);
     $expiry = cm_coerce_date_cell($row['expiry_date'] ?? null);
-    if (!$issue['ok']) { $messages[] = 'issue_date is not a valid date (expected YYYY-MM-DD).'; $status = 'error'; }
-    if (!$expiry['ok']) { $messages[] = 'expiry_date is not a valid date (expected YYYY-MM-DD).'; $status = 'error'; }
-    if ($issue['ok'] && $expiry['ok'] && $issue['value'] && $expiry['value'] && $expiry['value'] < $issue['value']) {
-        $messages[] = 'expiry_date is before issue_date.';
+    foreach (['issue_date' => $issue, 'surveillance_1_date' => $surv1, 'surveillance_2_date' => $surv2, 'expiry_date' => $expiry] as $label => $coerced) {
+        if (!$coerced['ok']) { $messages[] = "$label is not a valid date (expected YYYY-MM-DD)."; $status = 'error'; }
+    }
+    $orderedDates = array_values(array_filter(
+        [$issue['value'], $surv1['value'], $surv2['value'], $expiry['value']],
+        fn($d) => $d !== null
+    ));
+    $sortedDates = $orderedDates;
+    sort($sortedDates);
+    if ($orderedDates !== $sortedDates) {
+        $messages[] = 'Milestone dates are out of order — expected 1st Certification <= Surveillance 1 <= Surveillance 2 <= Recertification.';
         $status = 'error';
     }
 
@@ -240,6 +250,8 @@ function cm_validate_import_row(array $row, int $rowNum, PDO $db, array &$seenUe
             'accreditation_body'   => cm_clean_str($row['accreditation_body'] ?? null, 100),
             'certificate_number'   => $certNumber,
             'issue_date'           => $issue['value'],
+            'surveillance_1_date'  => $surv1['value'],
+            'surveillance_2_date'  => $surv2['value'],
             'expiry_date'          => $expiry['value'],
             'cycle_stage'          => $cycleStage,
             'cert_status'          => $certStatus,
@@ -375,16 +387,19 @@ if ($method === 'POST' && $action === 'commit') {
 
                 $insertCert = $db->prepare(
                     'INSERT INTO cm_certifications
-                        (cm_client_id, cm_scheme_type_id, accreditation_body, certificate_number, issue_date, expiry_date,
+                        (cm_client_id, cm_scheme_type_id, accreditation_body, certificate_number,
+                         issue_date, surveillance_1_date, surveillance_2_date, expiry_date,
                          cycle_stage, status, responsible_person_name, notes)
                      VALUES
-                        (:client_id, :scheme_id, :accreditation_body, :certificate_number, :issue_date, :expiry_date,
+                        (:client_id, :scheme_id, :accreditation_body, :certificate_number,
+                         :issue_date, :surveillance_1_date, :surveillance_2_date, :expiry_date,
                          :cycle_stage, :status, :responsible_person_name, :notes)'
                 );
                 $insertCert->execute([
                     'client_id' => $clientId, 'scheme_id' => $schemeId,
                     'accreditation_body' => $d['accreditation_body'], 'certificate_number' => $d['certificate_number'],
-                    'issue_date' => $d['issue_date'], 'expiry_date' => $d['expiry_date'],
+                    'issue_date' => $d['issue_date'], 'surveillance_1_date' => $d['surveillance_1_date'],
+                    'surveillance_2_date' => $d['surveillance_2_date'], 'expiry_date' => $d['expiry_date'],
                     'cycle_stage' => $d['cycle_stage'], 'status' => $d['cert_status'],
                     'responsible_person_name' => $d['responsible_person_name'], 'notes' => $d['notes'],
                 ]);

@@ -47,13 +47,28 @@ if ($method === 'GET') {
     $today = date('Y-m-d');
     [$t1, $t2, $t3] = cm_get_renewal_thresholds($db);
 
+    $q              = trim((string) ($_GET['q'] ?? ''));
     $schemeCategory = trim((string) ($_GET['scheme_category'] ?? ''));
     $industry       = trim((string) ($_GET['industry'] ?? ''));
     $responsibleId  = (int) ($_GET['responsible_person_id'] ?? 0);
     $bucket         = trim((string) ($_GET['bucket'] ?? ''));
 
-    $where  = ["cert.status != 'withdrawn'", 'cert.expiry_date IS NOT NULL'];
+    // A certification is a candidate if ANY of its 3 forward-looking
+    // milestones (surveillance_1, surveillance_2, recertification/expiry)
+    // is set — next-due is computed in PHP below rather than in SQL,
+    // since "earliest of up to 3 nullable date columns" is much clearer
+    // and less error-prone done row-by-row than as nested SQL CASE logic.
+    $where = [
+        "cert.status != 'withdrawn'",
+        '(cert.surveillance_1_date IS NOT NULL OR cert.surveillance_2_date IS NOT NULL OR cert.expiry_date IS NOT NULL)',
+    ];
     $params = [];
+
+    if ($q !== '') {
+        $escaped = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $q);
+        $where[] = "c.company_name LIKE :q ESCAPE '\\\\'";
+        $params['q'] = '%' . $escaped . '%';
+    }
 
     if ($schemeCategory !== '' && in_array($schemeCategory, ['ISO', 'BizSafe', 'JASANZ', 'Other'], true)) {
         $where[] = 'st.category = :scheme_category';
@@ -68,82 +83,60 @@ if ($method === 'GET') {
         $params['responsible_id'] = $responsibleId;
     }
 
-    $baseWhereSql = implode(' AND ', $where);
-    $baseSql = "
+    $whereSql = implode(' AND ', $where);
+    $sql = "
+        SELECT cert.id, cert.certificate_number, cert.status, cert.cycle_stage,
+               cert.issue_date, cert.surveillance_1_date, cert.surveillance_2_date, cert.expiry_date,
+               c.id AS client_id, c.company_name, c.industry_sector,
+               st.name AS scheme_name, st.category AS scheme_category,
+               COALESCE(u.name, cert.responsible_person_name) AS responsible_person
         FROM cm_certifications cert
         JOIN cm_clients c ON c.id = cert.cm_client_id
         JOIN cm_scheme_types st ON st.id = cert.cm_scheme_type_id
         LEFT JOIN users u ON u.id = cert.responsible_person_id
-        WHERE $baseWhereSql
+        WHERE $whereSql
     ";
+    $stmt = $db->prepare($sql);
+    $stmt->execute($params);
+    $all = $stmt->fetchAll();
 
-    // Bucket boundaries, expressed as day offsets from today:
-    //   overdue: expiry < today
-    //   near:    today <= expiry <= today + t1        (e.g. 0-30 days)
-    //   far:     today + t2 <= expiry <= today + t3    (e.g. 60-90 days)
-    $countParams = $params;
-    $countParams['t1'] = $t1;
-    $countParams['t2'] = $t2;
-    $countParams['t3'] = $t3;
+    $counts = ['overdue' => 0, 'near' => 0, 'far' => 0];
+    $bucketed = ['overdue' => [], 'near' => [], 'far' => [], 'later' => []];
 
-    $countSql = "
-        SELECT
-            SUM(CASE WHEN cert.expiry_date < :today1 THEN 1 ELSE 0 END) AS overdue_count,
-            SUM(CASE WHEN cert.expiry_date >= :today2 AND cert.expiry_date <= DATE_ADD(:today3, INTERVAL :t1 DAY) THEN 1 ELSE 0 END) AS near_count,
-            SUM(CASE WHEN cert.expiry_date >= DATE_ADD(:today4, INTERVAL :t2 DAY) AND cert.expiry_date <= DATE_ADD(:today5, INTERVAL :t3 DAY) THEN 1 ELSE 0 END) AS far_count
-        $baseSql
-    ";
-    $countParams['today1'] = $today;
-    $countParams['today2'] = $today;
-    $countParams['today3'] = $today;
-    $countParams['today4'] = $today;
-    $countParams['today5'] = $today;
+    foreach ($all as $cert) {
+        $next = cm_certification_next_due($cert, $today);
+        if ($next['date'] === null) continue; // shouldn't happen given the WHERE clause, but be defensive
 
-    $countStmt = $db->prepare($countSql);
-    $countStmt->execute($countParams);
-    $counts = $countStmt->fetch();
+        $daysUntil = (strtotime($next['date']) - strtotime($today)) / 86400;
 
-    // Drill-down list, optionally narrowed to one bucket. Built as three
-    // explicit branches (rather than splicing WHERE-clause fragments)
-    // so each bucket's date-arithmetic is easy to read and verify.
-    $listSql = "
-        SELECT cert.id, cert.certificate_number, cert.expiry_date, cert.status, cert.cycle_stage,
-               c.id AS client_id, c.company_name, c.industry_sector,
-               st.name AS scheme_name, st.category AS scheme_category,
-               COALESCE(u.name, cert.responsible_person_name) AS responsible_person
-        $baseSql
-    ";
-    if ($bucket === 'overdue') {
-        $listSql .= ' AND cert.expiry_date < :b_today';
-        $listParams = array_merge($params, ['b_today' => $today]);
-    } elseif ($bucket === 'near') {
-        $listSql .= ' AND cert.expiry_date >= :b_today AND cert.expiry_date <= DATE_ADD(:b_today2, INTERVAL :b_t1 DAY)';
-        $listParams = array_merge($params, ['b_today' => $today, 'b_today2' => $today, 'b_t1' => $t1]);
-    } elseif ($bucket === 'far') {
-        $listSql .= ' AND cert.expiry_date >= DATE_ADD(:b_today, INTERVAL :b_t2 DAY) AND cert.expiry_date <= DATE_ADD(:b_today2, INTERVAL :b_t3 DAY)';
-        $listParams = array_merge($params, ['b_today' => $today, 'b_today2' => $today, 'b_t2' => $t2, 'b_t3' => $t3]);
-    } else {
-        $listParams = $params;
-    }
-    $listSql .= ' ORDER BY cert.expiry_date ASC LIMIT 500';
+        if ($next['overdue']) {
+            $b = 'overdue';
+        } elseif ($daysUntil <= $t1) {
+            $b = 'near';
+        } elseif ($daysUntil >= $t2 && $daysUntil <= $t3) {
+            $b = 'far';
+        } else {
+            $b = 'later'; // between t1 and t2, or beyond t3 — not shown in a widget, but not dropped from "all"
+        }
 
-    $listStmt = $db->prepare($listSql);
-    $listStmt->execute($listParams);
-    $certifications = $listStmt->fetchAll();
-
-    foreach ($certifications as &$cert) {
+        $cert['next_due'] = $next;
         $cert['expiry_badge'] = cm_expiry_badge($cert['expiry_date'], $today);
+        $bucketed[$b][] = $cert;
+        if (isset($counts[$b])) $counts[$b]++;
     }
-    unset($cert);
+
+    if ($bucket !== '' && isset($bucketed[$bucket])) {
+        $selected = $bucketed[$bucket];
+    } else {
+        $selected = array_merge($bucketed['overdue'], $bucketed['near'], $bucketed['far'], $bucketed['later']);
+    }
+    usort($selected, fn($a, $b2) => strcmp($a['next_due']['date'] ?? '9999-99-99', $b2['next_due']['date'] ?? '9999-99-99'));
+    $selected = array_slice($selected, 0, 500);
 
     cm_json_response([
         'thresholds' => [$t1, $t2, $t3],
-        'counts' => [
-            'overdue' => (int) ($counts['overdue_count'] ?? 0),
-            'near'    => (int) ($counts['near_count'] ?? 0),
-            'far'     => (int) ($counts['far_count'] ?? 0),
-        ],
-        'certifications' => $certifications,
+        'counts' => $counts,
+        'certifications' => $selected,
     ]);
 }
 

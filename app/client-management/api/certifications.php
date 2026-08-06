@@ -36,6 +36,7 @@ if ($method === 'GET' && isset($_GET['id'])) {
     if (!$cert) cm_json_error('Certification not found.', 404);
 
     $cert['expiry_badge'] = cm_expiry_badge($cert['expiry_date'], $today);
+    $cert['next_due'] = cm_certification_next_due($cert, $today);
     cm_json_response(['certification' => $cert]);
 }
 
@@ -49,8 +50,10 @@ if ($method === 'GET') {
 
     foreach ($certs as &$cert) {
         $cert['expiry_badge'] = cm_expiry_badge($cert['expiry_date'], $today);
+        $cert['next_due'] = cm_certification_next_due($cert, $today);
     }
     unset($cert);
+    usort($certs, fn($a, $b) => strcmp($a['next_due']['date'] ?? '9999-99-99', $b['next_due']['date'] ?? '9999-99-99'));
 
     cm_json_response(['certifications' => $certs]);
 }
@@ -75,15 +78,30 @@ function cm_extract_cert_fields(array $input, PDO $db): array
         cm_json_error('Invalid status value.', 422);
     }
 
-    foreach (['issue_date' => $input['issue_date'] ?? null, 'expiry_date' => $input['expiry_date'] ?? null] as $label => $val) {
+    foreach ([
+        'issue_date' => $input['issue_date'] ?? null,
+        'surveillance_1_date' => $input['surveillance_1_date'] ?? null,
+        'surveillance_2_date' => $input['surveillance_2_date'] ?? null,
+        'expiry_date' => $input['expiry_date'] ?? null,
+    ] as $label => $val) {
         if ($val !== null && $val !== '' && !cm_is_valid_date($val)) {
             cm_json_error("Invalid $label — expected YYYY-MM-DD.", 422);
         }
     }
     $issueDate  = ($input['issue_date'] ?? '') !== '' ? $input['issue_date'] : null;
+    $surv1Date  = ($input['surveillance_1_date'] ?? '') !== '' ? $input['surveillance_1_date'] : null;
+    $surv2Date  = ($input['surveillance_2_date'] ?? '') !== '' ? $input['surveillance_2_date'] : null;
     $expiryDate = ($input['expiry_date'] ?? '') !== '' ? $input['expiry_date'] : null;
-    if ($issueDate !== null && $expiryDate !== null && $expiryDate < $issueDate) {
-        cm_json_error('Expiry date cannot be before the issue date.', 422);
+
+    // Chronological order across whichever of the 4 milestones are set —
+    // mirrors the client's own planner: 1st Cert -> Surveillance 1 ->
+    // Surveillance 2 -> Recertification. Only compares pairs that are both
+    // present, so partially-filled-in certifications aren't blocked.
+    $ordered = array_values(array_filter([$issueDate, $surv1Date, $surv2Date, $expiryDate], fn($d) => $d !== null));
+    $sorted = $ordered;
+    sort($sorted);
+    if ($ordered !== $sorted) {
+        cm_json_error('Milestone dates must be in order: 1st Certification, Surveillance 1, Surveillance 2, Recertification.', 422);
     }
 
     $responsiblePersonId = (int) ($input['responsible_person_id'] ?? 0);
@@ -100,6 +118,8 @@ function cm_extract_cert_fields(array $input, PDO $db): array
         'accreditation_body'      => cm_clean_str($input['accreditation_body'] ?? null, 100),
         'certificate_number'      => cm_clean_str($input['certificate_number'] ?? null, 100),
         'issue_date'              => $issueDate,
+        'surveillance_1_date'     => $surv1Date,
+        'surveillance_2_date'     => $surv2Date,
         'expiry_date'             => $expiryDate,
         'cycle_stage'             => $cycleStage,
         'status'                  => $status,
@@ -125,10 +145,12 @@ if ($method === 'POST') {
 
     $stmt = $db->prepare(
         'INSERT INTO cm_certifications
-            (cm_client_id, cm_scheme_type_id, accreditation_body, certificate_number, issue_date, expiry_date,
+            (cm_client_id, cm_scheme_type_id, accreditation_body, certificate_number, issue_date,
+             surveillance_1_date, surveillance_2_date, expiry_date,
              cycle_stage, status, responsible_person_id, responsible_person_name, notes)
          VALUES
-            (:cm_client_id, :cm_scheme_type_id, :accreditation_body, :certificate_number, :issue_date, :expiry_date,
+            (:cm_client_id, :cm_scheme_type_id, :accreditation_body, :certificate_number, :issue_date,
+             :surveillance_1_date, :surveillance_2_date, :expiry_date,
              :cycle_stage, :status, :responsible_person_id, :responsible_person_name, :notes)'
     );
     try {
@@ -161,7 +183,9 @@ if ($method === 'PUT') {
     $stmt = $db->prepare(
         'UPDATE cm_certifications SET
             cm_scheme_type_id = :cm_scheme_type_id, accreditation_body = :accreditation_body,
-            certificate_number = :certificate_number, issue_date = :issue_date, expiry_date = :expiry_date,
+            certificate_number = :certificate_number, issue_date = :issue_date,
+            surveillance_1_date = :surveillance_1_date, surveillance_2_date = :surveillance_2_date,
+            expiry_date = :expiry_date,
             cycle_stage = :cycle_stage, status = :status, responsible_person_id = :responsible_person_id,
             responsible_person_name = :responsible_person_name, notes = :notes
          WHERE id = :id'

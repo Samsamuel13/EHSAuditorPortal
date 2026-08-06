@@ -145,6 +145,65 @@ $user = ehs_require_role(['super_admin', 'admin']);
             <label for="f-notes">Notes</label>
             <textarea id="f-notes" rows="3"></textarea>
 
+            <div id="first-cert-section">
+                <hr style="margin:16px 0; border:none; border-top:1px solid #e5e7eb;">
+                <div style="display:flex; align-items:center; justify-content:space-between;">
+                    <strong>Add a certification now? (optional)</strong>
+                    <label style="font-weight:normal; font-size:0.85rem;">
+                        <input type="checkbox" id="fc-enable"> Yes, add one
+                    </label>
+                </div>
+
+                <div id="fc-fields" class="hidden" style="margin-top:10px;">
+                    <div class="modal-row">
+                        <div>
+                            <label for="fc-scheme-type">Scheme type *</label>
+                            <select id="fc-scheme-type"></select>
+                        </div>
+                        <div>
+                            <label for="fc-accreditation-body">Accreditation body</label>
+                            <input type="text" id="fc-accreditation-body" maxlength="100">
+                        </div>
+                    </div>
+                    <div class="modal-row">
+                        <div>
+                            <label for="fc-cert-number">Certificate number</label>
+                            <input type="text" id="fc-cert-number" maxlength="100">
+                        </div>
+                        <div>
+                            <label for="fc-status">Status</label>
+                            <select id="fc-status">
+                                <option value="pending">Pending</option>
+                                <option value="active" selected>Active</option>
+                                <option value="expired">Expired</option>
+                                <option value="suspended">Suspended</option>
+                                <option value="withdrawn">Withdrawn</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="modal-row">
+                        <div>
+                            <label for="fc-issue-date">1st Certification</label>
+                            <input type="date" id="fc-issue-date">
+                        </div>
+                        <div>
+                            <label for="fc-surv1-date">Surveillance 1</label>
+                            <input type="date" id="fc-surv1-date">
+                        </div>
+                    </div>
+                    <div class="modal-row">
+                        <div>
+                            <label for="fc-surv2-date">Surveillance 2</label>
+                            <input type="date" id="fc-surv2-date">
+                        </div>
+                        <div>
+                            <label for="fc-expiry-date">Recertification</label>
+                            <input type="date" id="fc-expiry-date">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div class="modal-actions">
                 <button id="modal-cancel" class="btn btn-ghost">Cancel</button>
                 <button id="modal-save" class="btn btn-primary">Save</button>

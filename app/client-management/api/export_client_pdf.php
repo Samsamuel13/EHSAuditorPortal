@@ -103,21 +103,23 @@ ob_start();
     <table class="certs">
         <thead>
             <tr>
-                <th>Scheme</th><th>Cert #</th><th>Accreditation Body</th><th>Cycle Stage</th>
-                <th>Issue Date</th><th>Expiry Date</th><th>Status</th><th>Responsible</th>
+                <th>Scheme</th><th>Cert #</th><th>Accreditation Body</th>
+                <th>1st Cert</th><th>Surv. 1</th><th>Surv. 2</th><th>Recert.</th>
+                <th>Status</th><th>Responsible</th>
             </tr>
         </thead>
         <tbody>
             <?php if (!$certs): ?>
-                <tr><td colspan="8">No certifications on file.</td></tr>
+                <tr><td colspan="9">No certifications on file.</td></tr>
             <?php endif; ?>
             <?php foreach ($certs as $c): ?>
                 <tr>
                     <td><?= cm_pdf_escape($c['scheme_name']) ?> (<?= cm_pdf_escape($c['scheme_category']) ?>)</td>
                     <td><?= cm_pdf_escape($c['certificate_number'] ?? '—') ?></td>
                     <td><?= cm_pdf_escape($c['accreditation_body'] ?? '—') ?></td>
-                    <td><?= cm_pdf_escape(cm_pdf_label($c['cycle_stage'])) ?></td>
                     <td><?= cm_pdf_escape($c['issue_date'] ?? '—') ?></td>
+                    <td><?= cm_pdf_escape($c['surveillance_1_date'] ?? '—') ?></td>
+                    <td><?= cm_pdf_escape($c['surveillance_2_date'] ?? '—') ?></td>
                     <td><?= cm_pdf_escape($c['expiry_date'] ?? '—') ?></td>
                     <td><span class="badge badge-<?= cm_pdf_escape($c['status']) ?>"><?= cm_pdf_escape(ucfirst($c['status'])) ?></span></td>
                     <td>

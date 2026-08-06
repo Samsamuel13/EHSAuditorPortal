@@ -29,14 +29,15 @@ $db = get_db();
 $headers = [
     'company_name', 'uen_registration_no', 'industry_sector', 'address', 'contact_person',
     'contact_designation', 'phone', 'email', 'website', 'client_status',
-    'scheme_type_name', 'accreditation_body', 'certificate_number', 'issue_date', 'expiry_date',
+    'scheme_type_name', 'accreditation_body', 'certificate_number',
+    'issue_date', 'surveillance_1_date', 'surveillance_2_date', 'expiry_date',
     'cycle_stage', 'cert_status', 'responsible_person_name', 'notes',
 ];
 
 $example = [
     'Acme Manufacturing Pte Ltd', '201234567A', 'Manufacturing', '1 Example Ave, Singapore 123456',
     'Jane Tan', 'HSE Manager', '+65 9123 4567', 'jane.tan@acme.example', 'https://acme.example', 'active',
-    'ISO 9001', 'JAS-ANZ', 'CERT-2026-0001', '2026-01-15', '2029-01-14',
+    'ISO 9001', 'JAS-ANZ', 'CERT-2026-0001', '2026-01-15', '2027-01-15', '2028-01-15', '2029-01-14',
     'initial', 'active', 'John Lim', 'Migrated from legacy Excel planner',
 ];
 
@@ -50,7 +51,7 @@ foreach ($headers as $i => $h) {
     $sheet->setCellValue($col . '2', $example[$i]);
     $sheet->getColumnDimension($col)->setWidth(20);
 }
-$sheet->getStyle('A1:S1')->getFont()->setBold(true);
+$sheet->getStyle('A1:U1')->getFont()->setBold(true);
 $sheet->freezePane('A2');
 
 // One row per client + certification combination — a client with 3

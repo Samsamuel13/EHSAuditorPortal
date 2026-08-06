@@ -70,7 +70,8 @@ $sql = "
         c.company_name, c.uen_registration_no, c.industry_sector, c.address, c.contact_person,
         c.contact_designation, c.phone, c.email, c.website, c.status AS client_status,
         st.name AS scheme_type_name, cert.accreditation_body, cert.certificate_number,
-        cert.issue_date, cert.expiry_date, cert.cycle_stage, cert.status AS cert_status,
+        cert.issue_date, cert.surveillance_1_date, cert.surveillance_2_date, cert.expiry_date,
+        cert.cycle_stage, cert.status AS cert_status,
         COALESCE(u.name, cert.responsible_person_name) AS responsible_person, cert.notes AS cert_notes
     FROM cm_clients c
     LEFT JOIN cm_certifications cert ON cert.cm_client_id = c.id
@@ -85,7 +86,8 @@ $rows = $stmt->fetchAll();
 
 $headers = [
     'Company Name', 'UEN', 'Industry', 'Address', 'Contact Person', 'Designation', 'Phone', 'Email', 'Website', 'Client Status',
-    'Scheme', 'Accreditation Body', 'Certificate #', 'Issue Date', 'Expiry Date', 'Cycle Stage', 'Cert Status', 'Responsible Person', 'Notes',
+    'Scheme', 'Accreditation Body', 'Certificate #', '1st Certification', 'Surveillance 1', 'Surveillance 2', 'Recertification',
+    'Cycle Stage', 'Cert Status', 'Responsible Person', 'Notes',
 ];
 
 $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
@@ -97,8 +99,8 @@ foreach ($headers as $i => $h) {
     $sheet->setCellValue($col . '1', $h);
     $sheet->getColumnDimension($col)->setWidth(18);
 }
-$sheet->getStyle('A1:S1')->getFont()->setBold(true);
-$sheet->getStyle('A1:S1')->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)->getStartColor()->setARGB('FFE9EDF5');
+$sheet->getStyle('A1:U1')->getFont()->setBold(true);
+$sheet->getStyle('A1:U1')->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)->getStartColor()->setARGB('FFE9EDF5');
 $sheet->freezePane('A2');
 
 $rowNum = 2;
@@ -107,7 +109,8 @@ foreach ($rows as $r) {
         $r['company_name'], $r['uen_registration_no'], $r['industry_sector'], $r['address'], $r['contact_person'],
         $r['contact_designation'], $r['phone'], $r['email'], $r['website'], $r['client_status'],
         $r['scheme_type_name'], $r['accreditation_body'], $r['certificate_number'],
-        $r['issue_date'], $r['expiry_date'], $r['cycle_stage'], $r['cert_status'], $r['responsible_person'], $r['cert_notes'],
+        $r['issue_date'], $r['surveillance_1_date'], $r['surveillance_2_date'], $r['expiry_date'],
+        $r['cycle_stage'], $r['cert_status'], $r['responsible_person'], $r['cert_notes'],
     ];
     foreach ($values as $i => $v) {
         $col = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($i + 1);

@@ -127,6 +127,77 @@ function cm_set_renewal_thresholds(PDO $db, array $thresholds): void
 }
 
 /**
+ * Given a certification row (must include issue_date, surveillance_1_date,
+ * surveillance_2_date, expiry_date), work out which of the four cycle
+ * milestones is "next due" and its date. Mirrors the client's own Excel
+ * planner: 1st Certification -> Surveillance 1 -> Surveillance 2 -> Recertification.
+ *
+ * Logic: of the three forward-looking milestones (surveillance_1,
+ * surveillance_2, expiry/recertification), pick the earliest one that is
+ * still today-or-future. If all three are in the past (or missing), the
+ * certification is overdue for recertification — return the expiry_date
+ * (even if null) as the overdue milestone, since that's the one that
+ * actually lapses the certificate.
+ */
+function cm_certification_next_due(array $cert, string $today): array
+{
+    $milestones = [
+        ['label' => 'Surveillance 1',  'date' => $cert['surveillance_1_date'] ?? null],
+        ['label' => 'Surveillance 2',  'date' => $cert['surveillance_2_date'] ?? null],
+        ['label' => 'Recertification', 'date' => $cert['expiry_date'] ?? null],
+    ];
+
+    $upcoming = array_filter($milestones, fn($m) => $m['date'] !== null && $m['date'] >= $today);
+    if ($upcoming) {
+        usort($upcoming, fn($a, $b) => strcmp($a['date'], $b['date']));
+        $next = $upcoming[0];
+        return ['label' => $next['label'], 'date' => $next['date'], 'overdue' => false];
+    }
+
+    // Nothing upcoming — overdue. Report the latest-dated milestone that's
+    // actually set (usually expiry_date/Recertification), so the message
+    // reflects the real state instead of always blaming "Recertification"
+    // when only an earlier milestone was ever filled in.
+    $past = array_filter($milestones, fn($m) => $m['date'] !== null);
+    if ($past) {
+        usort($past, fn($a, $b) => strcmp($b['date'], $a['date']));
+        $last = $past[0];
+        return ['label' => $last['label'], 'date' => $last['date'], 'overdue' => true];
+    }
+
+    return ['label' => null, 'date' => null, 'overdue' => false];
+}
+
+/**
+ * Minimal, swappable mail sender. Uses PHP's built-in mail() by default —
+ * works with zero setup but is frequently unreliable on shared hosting
+ * (spam-folder or silent drop, no delivery confirmation). To switch to
+ * SMTP later (recommended for production), replace the body of this one
+ * function with a PHPMailer SMTP call — nothing else in the module needs
+ * to change, since every caller only ever calls cm_send_mail().
+ *
+ * Returns true if the mail() call reported success (NOT proof of actual
+ * delivery — mail() only confirms it was handed to the local MTA).
+ */
+function cm_send_mail(string $to, string $subject, string $htmlBody): bool
+{
+    $fromEmail = 'no-reply@ehscertification.sg';
+    $fromName  = 'EHS Universal — Client Management';
+
+    $headers = [
+        'MIME-Version: 1.0',
+        'Content-Type: text/html; charset=UTF-8',
+        'From: ' . $fromName . ' <' . $fromEmail . '>',
+    ];
+
+    $ok = @mail($to, $subject, $htmlBody, implode("\r\n", $headers));
+    if (!$ok) {
+        error_log("cm_send_mail: failed to send to $to — subject: $subject");
+    }
+    return $ok;
+}
+
+/**
  * Compute a simple status/urgency badge for a certification's expiry date,
  * given the client's alert thresholds (or a default 90/60/30/0 scale if
  * none configured). Used by both the client detail page and renewal
