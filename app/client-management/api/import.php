@@ -27,6 +27,26 @@ $db = get_db();
 $method = $_SERVER['REQUEST_METHOD'];
 $action = $_GET['action'] ?? '';
 
+// Safety net: a true PHP fatal (e.g. memory exhausted, execution timeout)
+// cannot be caught by try/catch — it terminates the script immediately.
+// This shutdown handler runs even then, and if nothing was sent to the
+// browser yet, turns it into a readable JSON error instead of a blank 500.
+register_shutdown_function(function () {
+    $error = error_get_last();
+    if ($error !== null && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR], true)) {
+        error_log('cm import.php fatal: ' . $error['message'] . ' in ' . $error['file'] . ':' . $error['line']);
+        if (!headers_sent()) {
+            http_response_code(500);
+            header('Content-Type: application/json');
+            echo json_encode([
+                'error' => 'Server error during import: ' . $error['message']
+                    . ' (' . basename($error['file']) . ':' . $error['line'] . '). '
+                    . 'If this mentions memory or execution time, increase memory_limit/max_execution_time in cPanel MultiPHP INI Editor.',
+            ]);
+        }
+    }
+});
+
 const CM_IMPORT_MAX_ROWS = 2000;
 const CM_IMPORT_MAX_BYTES = 8 * 1024 * 1024; // 8 MB
 const CM_IMPORT_HEADERS = [
@@ -130,7 +150,7 @@ function cm_parse_import_file(string $tmpPath, string $originalName): array
  * earlier in THIS file, to catch in-file duplicates; $db checks are for
  * duplicates against already-committed data.
  */
-function cm_validate_import_row(array $row, int $rowNum, PDO $db, array &$seenUens, array &$seenCertNumbers, array $validSchemeNames): array
+function cm_validate_import_row(array $row, int $rowNum, array &$seenUens, array &$seenCertNumbers, array $validSchemeNames, array $existingUens, array $existingCertNumbers): array
 {
     $messages = [];
     $status = 'valid';
@@ -148,13 +168,11 @@ function cm_validate_import_row(array $row, int $rowNum, PDO $db, array &$seenUe
             $messages[] = "UEN \"$uen\" is already used by a different company name earlier in this file (row {$seenUens[$uenKey . '_row']}).";
             $status = 'error';
         }
-        $existing = $db->prepare('SELECT company_name FROM cm_clients WHERE uen_registration_no = :uen LIMIT 1');
-        $existing->execute(['uen' => $uen]);
-        $existingClient = $existing->fetch();
-        if ($existingClient && mb_strtolower($existingClient['company_name']) !== mb_strtolower((string) $companyName)) {
-            $messages[] = "UEN \"$uen\" already belongs to an existing client (\"{$existingClient['company_name']}\") with a different name.";
+        $existingClientName = $existingUens[$uenKey] ?? null;
+        if ($existingClientName !== null && mb_strtolower($existingClientName) !== mb_strtolower((string) $companyName)) {
+            $messages[] = "UEN \"$uen\" already belongs to an existing client (\"{$existingClientName}\") with a different name.";
             $status = 'error';
-        } elseif ($existingClient) {
+        } elseif ($existingClientName !== null) {
             $messages[] = 'Matches an existing client — certification will be added to it, client fields left unchanged.';
             if ($status === 'valid') $status = 'info';
         }
@@ -222,9 +240,8 @@ function cm_validate_import_row(array $row, int $rowNum, PDO $db, array &$seenUe
             $messages[] = "certificate_number \"$certNumber\" is duplicated earlier in this file (row {$seenCertNumbers[$certKey]}).";
             $status = 'error';
         }
-        $existingCert = $db->prepare('SELECT id FROM cm_certifications WHERE certificate_number = :n LIMIT 1');
-        $existingCert->execute(['n' => $certNumber]);
-        if ($existingCert->fetch()) {
+        $existingCert = isset($existingCertNumbers[$certKey]);
+        if ($existingCert) {
             $messages[] = "certificate_number \"$certNumber\" already exists in the system.";
             $status = 'error';
         }
@@ -261,6 +278,30 @@ function cm_validate_import_row(array $row, int $rowNum, PDO $db, array &$seenUe
     ];
 }
 
+/**
+ * Preload every existing UEN -> company_name and every existing
+ * certificate_number into PHP arrays in exactly 2 queries total, instead
+ * of cm_validate_import_row querying the DB once per row (which meant
+ * 800+ round-trips for a few hundred rows — slow enough on shared hosting
+ * to hit max_execution_time/memory_limit and 500).
+ */
+function cm_preload_import_lookups(PDO $db): array
+{
+    $uenStmt = $db->query('SELECT uen_registration_no, company_name FROM cm_clients WHERE uen_registration_no IS NOT NULL');
+    $existingUens = [];
+    foreach ($uenStmt->fetchAll() as $row) {
+        $existingUens[mb_strtolower($row['uen_registration_no'])] = $row['company_name'];
+    }
+
+    $certStmt = $db->query('SELECT certificate_number FROM cm_certifications WHERE certificate_number IS NOT NULL');
+    $existingCertNumbers = [];
+    foreach ($certStmt->fetchAll() as $row) {
+        $existingCertNumbers[mb_strtolower($row['certificate_number'])] = true;
+    }
+
+    return [$existingUens, $existingCertNumbers];
+}
+
 if ($method === 'POST' && $action === 'preview') {
     ehs_verify_csrf();
 
@@ -274,36 +315,40 @@ if ($method === 'POST' && $action === 'preview') {
 
     try {
         $parsedRows = cm_parse_import_file($file['tmp_name'], $file['name']);
+
+        if (empty($parsedRows)) cm_json_error('No data rows found in the file.', 422);
+        if (count($parsedRows) > CM_IMPORT_MAX_ROWS) {
+            cm_json_error('Too many rows (' . count($parsedRows) . '). Please split into files of ' . CM_IMPORT_MAX_ROWS . ' rows or fewer.', 422);
+        }
+
+        $schemeStmt = $db->query('SELECT name FROM cm_scheme_types');
+        $validSchemeNames = array_column($schemeStmt->fetchAll(), 'name');
+        [$existingUens, $existingCertNumbers] = cm_preload_import_lookups($db);
+
+        $seenUens = [];
+        $seenCertNumbers = [];
+        $results = [];
+        foreach ($parsedRows as $i => $row) {
+            $results[] = cm_validate_import_row($row, $i + 2, $seenUens, $seenCertNumbers, $validSchemeNames, $existingUens, $existingCertNumbers); // +2: header is row 1
+        }
+
+        $token = bin2hex(random_bytes(16));
+        $_SESSION['cm_import_batches'][$token] = ['rows' => $results, 'created_at' => time()];
+        // Keep the session from growing unbounded across many uploads in one sitting.
+        if (count($_SESSION['cm_import_batches']) > 5) {
+            $_SESSION['cm_import_batches'] = array_slice($_SESSION['cm_import_batches'], -5, null, true);
+        }
+
+        $summary = ['total' => count($results), 'valid' => 0, 'info' => 0, 'error' => 0];
+        foreach ($results as $r) { $summary[$r['status']]++; }
+
+        cm_json_response(['token' => $token, 'rows' => $results, 'summary' => $summary]);
     } catch (\RuntimeException $e) {
         cm_json_error($e->getMessage(), 422);
+    } catch (\Throwable $e) {
+        error_log('cm import.php preview exception: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
+        cm_json_error('Server error during preview: ' . $e->getMessage(), 500);
     }
-
-    if (empty($parsedRows)) cm_json_error('No data rows found in the file.', 422);
-    if (count($parsedRows) > CM_IMPORT_MAX_ROWS) {
-        cm_json_error('Too many rows (' . count($parsedRows) . '). Please split into files of ' . CM_IMPORT_MAX_ROWS . ' rows or fewer.', 422);
-    }
-
-    $schemeStmt = $db->query('SELECT name FROM cm_scheme_types');
-    $validSchemeNames = array_column($schemeStmt->fetchAll(), 'name');
-
-    $seenUens = [];
-    $seenCertNumbers = [];
-    $results = [];
-    foreach ($parsedRows as $i => $row) {
-        $results[] = cm_validate_import_row($row, $i + 2, $db, $seenUens, $seenCertNumbers, $validSchemeNames); // +2: header is row 1
-    }
-
-    $token = bin2hex(random_bytes(16));
-    $_SESSION['cm_import_batches'][$token] = ['rows' => $results, 'created_at' => time()];
-    // Keep the session from growing unbounded across many uploads in one sitting.
-    if (count($_SESSION['cm_import_batches']) > 5) {
-        $_SESSION['cm_import_batches'] = array_slice($_SESSION['cm_import_batches'], -5, null, true);
-    }
-
-    $summary = ['total' => count($results), 'valid' => 0, 'info' => 0, 'error' => 0];
-    foreach ($results as $r) { $summary[$r['status']]++; }
-
-    cm_json_response(['token' => $token, 'rows' => $results, 'summary' => $summary]);
 }
 
 if ($method === 'POST' && $action === 'commit') {
@@ -318,8 +363,14 @@ if ($method === 'POST' && $action === 'commit') {
 
     // Re-validate against CURRENT data — time may have passed since preview,
     // and another admin could have imported/added conflicting records.
-    $schemeStmt = $db->query('SELECT name FROM cm_scheme_types');
-    $validSchemeNames = array_column($schemeStmt->fetchAll(), 'name');
+    try {
+        $schemeStmt = $db->query('SELECT name FROM cm_scheme_types');
+        $validSchemeNames = array_column($schemeStmt->fetchAll(), 'name');
+        [$existingUens, $existingCertNumbers] = cm_preload_import_lookups($db);
+    } catch (\Throwable $e) {
+        error_log('cm import.php commit setup exception: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
+        cm_json_error('Server error preparing the import: ' . $e->getMessage(), 500);
+    }
     $seenUens = [];
     $seenCertNumbers = [];
 
@@ -332,7 +383,7 @@ if ($method === 'POST' && $action === 'commit') {
     foreach ($batch['rows'] as $original) {
         $revalidated = cm_validate_import_row(
             array_merge($original['data'], []), // data already normalized; re-run through the same rules
-            $original['row_num'], $db, $seenUens, $seenCertNumbers, $validSchemeNames
+            $original['row_num'], $seenUens, $seenCertNumbers, $validSchemeNames, $existingUens, $existingCertNumbers
         );
 
         if ($revalidated['status'] === 'error') {
