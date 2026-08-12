@@ -72,6 +72,7 @@ $user = ehs_require_role(['super_admin', 'admin']);
                     <th>UEN</th>
                     <th>Industry</th>
                     <th>Contact</th>
+                    <th>Consultant</th>
                     <th>Status</th>
                     <th></th>
                 </tr></thead>
@@ -125,6 +126,13 @@ $user = ehs_require_role(['super_admin', 'admin']);
                 <div>
                     <label for="f-contact-designation">Designation</label>
                     <input type="text" id="f-contact-designation" maxlength="100">
+                </div>
+            </div>
+
+            <div class="modal-row">
+                <div>
+                    <label for="f-consultant">Consultant</label>
+                    <input type="text" id="f-consultant" maxlength="150">
                 </div>
             </div>
 

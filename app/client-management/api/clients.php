@@ -132,6 +132,7 @@ function cm_extract_client_fields(array $input): array
         'address'             => cm_clean_str($input['address'] ?? null, 255),
         'contact_person'      => cm_clean_str($input['contact_person'] ?? null, 150),
         'contact_designation' => cm_clean_str($input['contact_designation'] ?? null, 100),
+        'consultant'          => cm_clean_str($input['consultant'] ?? null, 150),
         'phone'               => cm_clean_str($input['phone'] ?? null, 30),
         'email'               => $email,
         'website'             => cm_clean_str($input['website'] ?? null, 255),
@@ -167,10 +168,10 @@ if ($method === 'POST') {
     $stmt = $db->prepare(
         'INSERT INTO cm_clients
             (company_name, uen_registration_no, industry_sector, address, contact_person,
-             contact_designation, phone, email, website, status, notes)
+             contact_designation, consultant, phone, email, website, status, notes)
          VALUES
             (:company_name, :uen_registration_no, :industry_sector, :address, :contact_person,
-             :contact_designation, :phone, :email, :website, :status, :notes)'
+             :contact_designation, :consultant, :phone, :email, :website, :status, :notes)'
     );
     try {
         $stmt->execute($fields);
@@ -216,7 +217,7 @@ if ($method === 'PUT') {
         'UPDATE cm_clients SET
             company_name = :company_name, uen_registration_no = :uen_registration_no,
             industry_sector = :industry_sector, address = :address, contact_person = :contact_person,
-            contact_designation = :contact_designation, phone = :phone, email = :email,
+            contact_designation = :contact_designation, consultant = :consultant, phone = :phone, email = :email,
             website = :website, status = :status, notes = :notes
          WHERE id = :id'
     );

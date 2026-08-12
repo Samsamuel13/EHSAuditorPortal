@@ -93,6 +93,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 <td>${escapeHtml(c.uen_registration_no || '—')}</td>
                 <td>${escapeHtml(c.industry_sector || '—')}</td>
                 <td>${escapeHtml(c.contact_person || '—')}</td>
+                <td>${escapeHtml(c.consultant || '—')}</td>
                 <td>${statusBadge(c.status)}</td>
                 <td class="mgmt-actions">
                     <button data-edit="${c.id}">Edit</button>
@@ -157,6 +158,7 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('f-address').value = client ? (client.address || '') : '';
         document.getElementById('f-contact-person').value = client ? (client.contact_person || '') : '';
         document.getElementById('f-contact-designation').value = client ? (client.contact_designation || '') : '';
+        document.getElementById('f-consultant').value = client ? (client.consultant || '') : '';
         document.getElementById('f-phone').value = client ? (client.phone || '') : '';
         document.getElementById('f-email').value = client ? (client.email || '') : '';
         document.getElementById('f-website').value = client ? (client.website || '') : '';
@@ -202,6 +204,7 @@ document.addEventListener('DOMContentLoaded', function () {
             address: document.getElementById('f-address').value.trim(),
             contact_person: document.getElementById('f-contact-person').value.trim(),
             contact_designation: document.getElementById('f-contact-designation').value.trim(),
+            consultant: document.getElementById('f-consultant').value.trim(),
             phone: document.getElementById('f-phone').value.trim(),
             email: document.getElementById('f-email').value.trim(),
             website: document.getElementById('f-website').value.trim(),

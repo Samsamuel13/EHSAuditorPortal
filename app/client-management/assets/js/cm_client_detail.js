@@ -32,6 +32,7 @@ document.addEventListener('DOMContentLoaded', function () {
             address: document.getElementById('f-address').value.trim(),
             contact_person: document.getElementById('f-contact-person').value.trim(),
             contact_designation: document.getElementById('f-contact-designation').value.trim(),
+            consultant: document.getElementById('f-consultant').value.trim(),
             phone: document.getElementById('f-phone').value.trim(),
             email: document.getElementById('f-email').value.trim(),
             website: document.getElementById('f-website').value.trim(),

@@ -84,6 +84,7 @@ $activity = $logStmt->fetchAll();
             <div><dt>Industry sector</dt><dd><?= htmlspecialchars($client['industry_sector'] ?? '—') ?></dd></div>
             <div><dt>Contact person</dt><dd><?= htmlspecialchars($client['contact_person'] ?? '—') ?></dd></div>
             <div><dt>Designation</dt><dd><?= htmlspecialchars($client['contact_designation'] ?? '—') ?></dd></div>
+            <div><dt>Consultant</dt><dd><?= htmlspecialchars($client['consultant'] ?? '—') ?></dd></div>
             <div><dt>Phone</dt><dd><?= htmlspecialchars($client['phone'] ?? '—') ?></dd></div>
             <div><dt>Email</dt><dd><?= htmlspecialchars($client['email'] ?? '—') ?></dd></div>
             <div><dt>Website</dt><dd><?= htmlspecialchars($client['website'] ?? '—') ?></dd></div>
@@ -174,6 +175,13 @@ $activity = $logStmt->fetchAll();
                 <div>
                     <label for="f-contact-designation">Designation</label>
                     <input type="text" id="f-contact-designation" maxlength="100" value="<?= htmlspecialchars($client['contact_designation'] ?? '') ?>">
+                </div>
+            </div>
+
+            <div class="modal-row">
+                <div>
+                    <label for="f-consultant">Consultant</label>
+                    <input type="text" id="f-consultant" maxlength="150" value="<?= htmlspecialchars($client['consultant'] ?? '') ?>">
                 </div>
             </div>
 

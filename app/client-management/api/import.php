@@ -51,7 +51,7 @@ const CM_IMPORT_MAX_ROWS = 2000;
 const CM_IMPORT_MAX_BYTES = 8 * 1024 * 1024; // 8 MB
 const CM_IMPORT_HEADERS = [
     'company_name', 'uen_registration_no', 'industry_sector', 'address', 'contact_person',
-    'contact_designation', 'phone', 'email', 'website', 'client_status',
+    'contact_designation', 'consultant', 'phone', 'email', 'website', 'client_status',
     'scheme_type_name', 'accreditation_body', 'certificate_number',
     'issue_date', 'surveillance_1_date', 'surveillance_2_date', 'expiry_date',
     'cycle_stage', 'cert_status', 'responsible_person_name', 'notes',
@@ -259,6 +259,7 @@ function cm_validate_import_row(array $row, int $rowNum, array &$seenUens, array
             'address'              => cm_clean_str($row['address'] ?? null, 255),
             'contact_person'       => cm_clean_str($row['contact_person'] ?? null, 150),
             'contact_designation'  => cm_clean_str($row['contact_designation'] ?? null, 100),
+            'consultant'            => cm_clean_str($row['consultant'] ?? null, 150),
             'phone'                => cm_clean_str($row['phone'] ?? null, 30),
             'email'                => $email,
             'website'              => cm_clean_str($row['website'] ?? null, 255),
@@ -413,14 +414,15 @@ if ($method === 'POST' && $action === 'commit') {
             if ($clientId === null) {
                 $insertClient = $db->prepare(
                     'INSERT INTO cm_clients (company_name, uen_registration_no, industry_sector, address, contact_person,
-                        contact_designation, phone, email, website, status, notes)
+                        contact_designation, consultant, phone, email, website, status, notes)
                      VALUES (:company_name, :uen_registration_no, :industry_sector, :address, :contact_person,
-                        :contact_designation, :phone, :email, :website, :status, :notes)'
+                        :contact_designation, :consultant, :phone, :email, :website, :status, :notes)'
                 );
                 $insertClient->execute([
                     'company_name' => $d['company_name'], 'uen_registration_no' => $d['uen_registration_no'],
                     'industry_sector' => $d['industry_sector'], 'address' => $d['address'],
                     'contact_person' => $d['contact_person'], 'contact_designation' => $d['contact_designation'],
+                    'consultant' => $d['consultant'],
                     'phone' => $d['phone'], 'email' => $d['email'], 'website' => $d['website'],
                     'status' => $d['client_status'], 'notes' => $d['notes'],
                 ]);

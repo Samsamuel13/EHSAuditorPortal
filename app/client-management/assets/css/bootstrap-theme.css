@@ -1,0 +1,46 @@
+/* assets/css/bootstrap-theme.css
+ *
+ * Loaded AFTER the Bootstrap 5 CDN stylesheet. Remaps Bootstrap's own CSS
+ * custom properties to the existing EHS Universal brand colors (matched to
+ * assets/img/logo.png: navy #283891, red #bf1e2e — same values as the
+ * --brand / --brand-accent variables in the legacy style.css).
+ *
+ * This is a CDN-based Bootstrap setup — no Sass build step. Bootstrap 5.3+
+ * exposes its palette as CSS variables (--bs-primary, --bs-danger, etc.),
+ * which is what makes deep re-theming possible without recompiling Sass.
+ */
+
+:root {
+    --bs-primary: #283891;
+    --bs-primary-rgb: 40, 56, 145;
+    --bs-danger: #bf1e2e;
+    --bs-danger-rgb: 191, 30, 46;
+    --bs-body-bg: #f5f6f8;
+    --bs-border-radius: 0.625rem;   /* matches legacy --radius: 10px */
+    --bs-border-radius-lg: 0.75rem;
+    --bs-link-color: #283891;
+    --bs-link-hover-color: #1c2769;
+}
+
+.btn-primary {
+    --bs-btn-bg: var(--bs-primary);
+    --bs-btn-border-color: var(--bs-primary);
+    --bs-btn-hover-bg: #1c2769;
+    --bs-btn-hover-border-color: #1c2769;
+    --bs-btn-active-bg: #161f52;
+    --bs-btn-active-border-color: #161f52;
+}
+
+.navbar-brand-ehs {
+    background: var(--bs-primary);
+}
+
+/* Badge color helpers matching the existing status vocabulary
+   (active/suspended/withdrawn/blacklisted, and expiry urgency). Bootstrap's
+   own .text-bg-* utilities cover most of this, but the exact green/amber
+   used elsewhere in the app aren't quite Bootstrap's defaults, so these
+   keep visual continuity with pages not yet converted. */
+.badge-ehs-active      { background-color: #e6f4ea; color: #1e7e34; }
+.badge-ehs-amber       { background-color: #fff4e5; color: #b45309; }
+.badge-ehs-red         { background-color: #fdecea; color: #b91c1c; }
+.badge-ehs-neutral     { background-color: #f1f2f4; color: #6b7280; }
