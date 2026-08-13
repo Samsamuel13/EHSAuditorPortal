@@ -54,6 +54,7 @@ $activity = $logStmt->fetchAll();
             <?= htmlspecialchars($user['name']) ?>
             &middot; <a href="<?= ehs_url('client-management/index.php') ?>">Client Directory</a>
             &middot; <a href="<?= ehs_url('client-management/renewal_dashboard.php') ?>">Renewal Dashboard</a>
+            &middot; <a href="<?= ehs_url('client-management/audit_extract.php') ?>">Audit Extract</a>
             &middot; <a href="<?= ehs_url('client-management/import.php') ?>">Bulk Import</a>
             &middot; <a href="<?= ehs_url('admin/index.php') ?>">Scheduler Dashboard</a>
             &middot; <a href="<?= ehs_url('logout.php') ?>">Log out</a>

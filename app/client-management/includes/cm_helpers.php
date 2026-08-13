@@ -169,6 +169,24 @@ function cm_certification_next_due(array $cert, string $today): array
 }
 
 /**
+ * Returns [startDate, endDate, label] for a calendar month offset from the
+ * current month (0 = this month, -1 = last month, 1 = next month), as
+ * 'YYYY-MM-DD' strings covering the FULL month (1st to last day).
+ * Used for the "audit due last/this/next month" extract, which is a fixed
+ * calendar window — distinct from the renewal dashboard's rolling
+ * N-days-from-today thresholds.
+ */
+function cm_month_range(int $monthOffset): array
+{
+    $base = new DateTime('first day of this month');
+    $base->modify($monthOffset . ' month');
+    $start = $base->format('Y-m-d');
+    $end = (clone $base)->modify('last day of this month')->format('Y-m-d');
+    $label = $base->format('F Y');
+    return [$start, $end, $label];
+}
+
+/**
  * Minimal, swappable mail sender. Uses PHP's built-in mail() by default —
  * works with zero setup but is frequently unreliable on shared hosting
  * (spam-folder or silent drop, no delivery confirmation). To switch to
