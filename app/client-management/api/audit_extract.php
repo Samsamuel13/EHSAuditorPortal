@@ -78,13 +78,16 @@ if ($responsibleId > 0) {
 }
 
 // Match if ANY active milestone column falls within [rangeStart, rangeEnd].
+// NOTE: each milestone needs its OWN placeholder names — real (non-emulated)
+// prepared statements reject the same named param appearing twice in one
+// query, and this OR-chain can repeat the range up to 4 times.
 $milestoneConds = [];
 foreach ($activeMilestones as $key => $m) {
-    $milestoneConds[] = "({$m['col']} BETWEEN :range_start AND :range_end)";
+    $milestoneConds[] = "({$m['col']} BETWEEN :range_start_$key AND :range_end_$key)";
+    $params["range_start_$key"] = $rangeStart;
+    $params["range_end_$key"]   = $rangeEnd;
 }
 $where[] = '(' . implode(' OR ', $milestoneConds) . ')';
-$params['range_start'] = $rangeStart;
-$params['range_end']   = $rangeEnd;
 
 $whereSql = implode(' AND ', $where);
 $sql = "
@@ -125,19 +128,28 @@ usort($results, fn($a, $b) => strcmp($a['milestone_date'], $b['milestone_date'])
 // Counts for all 3 months in one shot, so the tab labels can show numbers
 // without 3 separate requests. Reuses the same filters (minus month).
 $counts = [];
-foreach ($offsetMap as $key => $offset) {
+// Base filters (q/scheme_category/industry/responsible), WITHOUT the
+// milestone OR-clause — that's rebuilt fresh per month below with its
+// own uniquely-named placeholders.
+$baseWhere = array_slice($where, 0, count($where) - 1);
+$baseParams = $params;
+foreach ($activeMilestones as $key => $m) {
+    unset($baseParams["range_start_$key"], $baseParams["range_end_$key"]);
+}
+
+foreach ($offsetMap as $monthLoopKey => $offset) {
     [$s, $e] = cm_month_range($offset);
     $conds = [];
-    foreach ($activeMilestones as $m) {
-        $conds[] = "({$m['col']} BETWEEN :cs_$key AND :ce_$key)";
+    $countParams = $baseParams;
+    foreach ($activeMilestones as $mKey => $m) {
+        $ph = "cs_{$monthLoopKey}_{$mKey}";
+        $ph2 = "ce_{$monthLoopKey}_{$mKey}";
+        $conds[] = "({$m['col']} BETWEEN :$ph AND :$ph2)";
+        $countParams[$ph]  = $s;
+        $countParams[$ph2] = $e;
     }
-    $countWhere = $where;
-    array_pop($countWhere); // drop the previous milestone OR-clause
+    $countWhere = $baseWhere;
     $countWhere[] = '(' . implode(' OR ', $conds) . ')';
-    $countParams = $params;
-    unset($countParams['range_start'], $countParams['range_end']);
-    $countParams["cs_$key"] = $s;
-    $countParams["ce_$key"] = $e;
 
     $countSql = "
         SELECT COUNT(*) FROM cm_certifications cert
@@ -147,7 +159,7 @@ foreach ($offsetMap as $key => $offset) {
         WHERE " . implode(' AND ', $countWhere);
     $cStmt = $db->prepare($countSql);
     $cStmt->execute($countParams);
-    $counts[$key] = (int) $cStmt->fetchColumn();
+    $counts[$monthLoopKey] = (int) $cStmt->fetchColumn();
 }
 
 cm_json_response([

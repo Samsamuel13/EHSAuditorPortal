@@ -66,13 +66,15 @@ if ($responsibleId > 0) {
     $params['responsible_id'] = $responsibleId;
 }
 
+// NOTE: unique placeholder per milestone — real (non-emulated) prepared
+// statements reject the same named param appearing twice in one query.
 $milestoneConds = [];
-foreach ($activeMilestones as $m) {
-    $milestoneConds[] = "({$m['col']} BETWEEN :range_start AND :range_end)";
+foreach ($activeMilestones as $key => $m) {
+    $milestoneConds[] = "({$m['col']} BETWEEN :range_start_$key AND :range_end_$key)";
+    $params["range_start_$key"] = $rangeStart;
+    $params["range_end_$key"]   = $rangeEnd;
 }
 $where[] = '(' . implode(' OR ', $milestoneConds) . ')';
-$params['range_start'] = $rangeStart;
-$params['range_end']   = $rangeEnd;
 
 $whereSql = implode(' AND ', $where);
 $sql = "
