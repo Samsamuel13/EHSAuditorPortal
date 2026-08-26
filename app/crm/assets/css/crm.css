@@ -1,0 +1,80 @@
+/* crm/assets/css/crm.css — additive only. Layout/components lean on
+   Bootstrap 5 utility classes; this file covers what Bootstrap doesn't. */
+
+.crm-topbar {
+    background: #283891;
+    color: #fff;
+    padding: 10px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.crm-topbar a { color: #dfe3f7; text-decoration: none; margin-left: 6px; }
+.crm-topbar a:hover { color: #fff; text-decoration: underline; }
+.crm-topbar-logo { height: 28px; vertical-align: middle; margin-right: 8px; }
+
+.crm-board {
+    display: flex;
+    gap: 12px;
+    overflow-x: auto;
+    padding-bottom: 12px;
+}
+.crm-column {
+    background: #f4f5fa;
+    border-radius: 8px;
+    min-width: 250px;
+    max-width: 270px;
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100vh - 260px);
+}
+.crm-column-header {
+    padding: 10px 12px;
+    font-weight: 600;
+    font-size: 0.85rem;
+    border-bottom: 2px solid #dfe1ea;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.crm-column-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+    min-height: 60px;
+}
+.crm-card {
+    background: #fff;
+    border-radius: 6px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    cursor: grab;
+    border-left: 3px solid #283891;
+}
+.crm-card:active { cursor: grabbing; }
+.crm-card .crm-card-company { font-weight: 600; font-size: 0.88rem; margin-bottom: 2px; }
+.crm-card .crm-card-meta { font-size: 0.75rem; color: #6b7280; }
+.crm-card.sortable-ghost { opacity: 0.4; }
+
+.crm-column[data-stage="lost"] .crm-card,
+.crm-column[data-stage="on_hold"] .crm-card { border-left-color: #9ca3af; }
+.crm-column[data-stage="awarded"] .crm-card { border-left-color: #1e7e34; }
+.crm-column[data-stage="negotiation"] .crm-card { border-left-color: #b45309; }
+
+.crm-timeline-item {
+    border-left: 2px solid #dfe1ea;
+    padding: 4px 0 12px 16px;
+    position: relative;
+}
+.crm-timeline-item::before {
+    content: '';
+    position: absolute;
+    left: -5px; top: 6px;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #283891;
+}
