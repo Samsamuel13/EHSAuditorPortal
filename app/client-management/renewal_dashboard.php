@@ -49,6 +49,15 @@ $isSuperAdmin = $user['role'] === 'super_admin';
     .cm-btn-log { background: #16a34a; color: #fff; border: none; border-radius: 6px; padding: 9px 18px; font-weight: 600; cursor: pointer; }
     .cm-btn-log:hover { background: #15803d; }
     .cm-history-divider { border-top: 1px solid #e5e7eb; margin: 16px 0 12px; padding-top: 12px; font-size: 0.8rem; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.04em; }
+
+    /* Blinking attention indicator for urgent rows/widgets */
+    @keyframes cm-blink { 0%, 100% { opacity: 1; box-shadow: 0 0 0 0 currentColor; } 50% { opacity: 0.35; box-shadow: 0 0 6px 2px currentColor; } }
+    .cm-blink-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle; animation: cm-blink 1.1s ease-in-out infinite; }
+    .cm-blink-red { background: #dc2626; color: #dc2626; }
+    .cm-blink-amber { background: #d97706; color: #d97706; }
+    /* Small blinking badge pinned to the top-right corner of a widget card */
+    .cm-widget-blink { position: absolute; top: 10px; right: 12px; width: 12px; height: 12px; border-radius: 50%; background: #d97706; color: #d97706; animation: cm-blink 1.1s ease-in-out infinite; }
+    .dash-card { position: relative; }
 </style>
 </head>
 <body>
@@ -89,6 +98,7 @@ $isSuperAdmin = $user['role'] === 'super_admin';
 
         <div class="dash-grid" style="grid-template-columns: repeat(3, 1fr);">
             <div class="dash-card" id="widget-near" style="cursor:pointer;">
+                <span id="widget-near-blink" class="cm-widget-blink hidden"></span>
                 <h3 id="widget-near-title">Expiring soon</h3>
                 <div class="stat-row"><span class="stat-number" id="count-near">—</span><span class="stat-label">certifications</span></div>
             </div>

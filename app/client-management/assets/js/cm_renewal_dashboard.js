@@ -39,16 +39,16 @@ document.addEventListener('DOMContentLoaded', function () {
     // Computed client-side from the same next_due.date the API already
     // returns, so no backend change was needed for this column.
     function daysInfo(dateStr) {
-        if (!dateStr) return { text: '—', cls: 'cm-days-ok' };
+        if (!dateStr) return { text: '—', cls: 'cm-days-ok', blink: null };
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         const due = new Date(dateStr + 'T00:00:00');
         const diff = Math.round((due - today) / 86400000);
 
-        if (diff < 0) return { text: `${Math.abs(diff)} day${Math.abs(diff) === 1 ? '' : 's'} overdue`, cls: 'cm-days-overdue' };
-        if (diff === 0) return { text: 'Due today', cls: 'cm-days-overdue' };
-        if (diff <= 30) return { text: `In ${diff} day${diff === 1 ? '' : 's'}`, cls: 'cm-days-soon' };
-        return { text: `In ${diff} days`, cls: 'cm-days-ok' };
+        if (diff < 0) return { text: `${Math.abs(diff)} day${Math.abs(diff) === 1 ? '' : 's'} overdue`, cls: 'cm-days-overdue', blink: 'cm-blink-red' };
+        if (diff === 0) return { text: 'Due today', cls: 'cm-days-overdue', blink: 'cm-blink-red' };
+        if (diff <= 30) return { text: `In ${diff} day${diff === 1 ? '' : 's'}`, cls: 'cm-days-soon', blink: 'cm-blink-amber' };
+        return { text: `In ${diff} days`, cls: 'cm-days-ok', blink: null };
     }
 
     function loadResponsibleFilter() {
@@ -95,6 +95,7 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('count-near').textContent = data.counts.near;
         document.getElementById('count-far').textContent = data.counts.far;
         document.getElementById('count-overdue').textContent = data.counts.overdue;
+        document.getElementById('widget-near-blink').classList.toggle('hidden', !(data.counts.near > 0));
 
         ['widget-near', 'widget-far', 'widget-overdue'].forEach(id => document.getElementById(id).style.outline = '');
         const activeMap = { near: 'widget-near', far: 'widget-far', overdue: 'widget-overdue' };
@@ -111,13 +112,14 @@ document.addEventListener('DOMContentLoaded', function () {
 
         body.innerHTML = certs.map(c => {
             const days = daysInfo(c.next_due.date);
+            const dot = days.blink ? `<span class="cm-blink-dot ${days.blink}" title="Needs attention"></span>` : '';
             return `
             <tr>
                 <td><a href="${window.EHS_BASE_URL}/client-management/client_detail.php?id=${c.client_id}">${escapeHtml(c.company_name)}</a></td>
                 <td>${escapeHtml(c.scheme_name)} (${escapeHtml(c.scheme_category)})</td>
                 <td>${escapeHtml(c.certificate_number || '—')}</td>
                 <td>${escapeHtml(c.next_due.label || '—')}: ${escapeHtml(c.next_due.date || '—')} <span class="badge ${c.next_due.overdue ? 'cm-badge-red' : 'cm-badge-amber'}">${c.next_due.overdue ? 'Overdue' : 'Upcoming'}</span></td>
-                <td class="${days.cls}">${escapeHtml(days.text)}</td>
+                <td class="${days.cls}">${dot}${escapeHtml(days.text)}</td>
                 <td>${escapeHtml(c.status)}</td>
                 <td>${escapeHtml(c.responsible_person || '—')}</td>
                 <td><button class="btn btn-ghost-light btn-small" style="width:auto;" onclick="cmOpenNotesModal(${c.client_id}, ${c.id}, '${escapeHtml(c.company_name).replace(/'/g, "\\'")}', '${escapeHtml(c.status)}')">Log Activity</button></td>
