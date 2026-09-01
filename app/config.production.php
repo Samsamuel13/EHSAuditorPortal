@@ -13,7 +13,7 @@
 define('DB_HOST', 'localhost');   // usually correct on shared hosting; change if your host gave you a different DB host
 define('DB_NAME', 'ehsuser');
 define('DB_USER', 'ehsuser');
-define('DB_PASS', 'PASTE_YOUR_REAL_DB_PASSWORD_HERE');   // <-- fill this in yourself; never share it with me
+define('DB_PASS', 'cCyG6R6PZ@z1');   // <-- fill this in yourself; never share it with me
 define('DB_CHARSET', 'utf8mb4');
 
 // --- App ---

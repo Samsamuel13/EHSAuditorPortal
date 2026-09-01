@@ -18,38 +18,6 @@ $isSuperAdmin = $user['role'] === 'super_admin';
 <link rel="stylesheet" href="<?= ehs_url('assets/css/dashboard.css') ?>">
 <link rel="stylesheet" href="<?= ehs_url('assets/css/management.css') ?>">
 <link rel="stylesheet" href="<?= ehs_url('client-management/assets/css/cm.css') ?>">
-<style>
-    /* Scoped to this page only — a small self-contained modal so this
-       feature doesn't depend on adding new classes to the shared cm.css. */
-    .cm-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center; z-index: 1000; }
-    .cm-modal-overlay.hidden { display: none; }
-    .cm-modal { background: #fff; border-radius: 8px; padding: 20px; width: 480px; max-width: 92vw; max-height: 80vh; overflow-y: auto; box-shadow: 0 8px 30px rgba(0,0,0,0.2); }
-    .cm-modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-    .cm-modal-header h3 { margin: 0; font-size: 1.05rem; }
-    .cm-modal-close { background: none; border: none; font-size: 1.5rem; line-height: 1; cursor: pointer; color: #6b7280; }
-    .cm-modal-close:hover { color: #111827; }
-    .cm-note-entry { border-left: 2px solid #dfe1ea; padding: 6px 0 10px 12px; margin-bottom: 4px; }
-    .cm-note-entry .cm-note-meta { font-size: 0.75rem; color: #6b7280; margin-bottom: 2px; }
-    .cm-note-empty { color: #6b7280; font-size: 0.9rem; padding: 8px 0; }
-    #notes-new-text { width: 100%; box-sizing: border-box; font-family: inherit; padding: 6px 8px; }
-    .cm-days-overdue { color: #b91c1c; font-weight: 600; }
-    .cm-days-soon { color: #b45309; font-weight: 600; }
-    .cm-days-ok { color: #374151; }
-
-    /* Log Activity form */
-    .cm-log-field { margin-bottom: 14px; }
-    .cm-log-field label { display: block; font-size: 0.72rem; letter-spacing: 0.04em; text-transform: uppercase; color: #6b7280; margin-bottom: 5px; font-weight: 600; }
-    .cm-log-field select, .cm-log-field input[type="text"], .cm-log-field textarea {
-        width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-family: inherit; font-size: 0.9rem;
-    }
-    .cm-log-field textarea { resize: vertical; }
-    .cm-log-row { display: flex; gap: 12px; }
-    .cm-log-row .cm-log-field { flex: 1; }
-    .cm-status-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; }
-    .cm-btn-log { background: #16a34a; color: #fff; border: none; border-radius: 6px; padding: 9px 18px; font-weight: 600; cursor: pointer; }
-    .cm-btn-log:hover { background: #15803d; }
-    .cm-history-divider { border-top: 1px solid #e5e7eb; margin: 16px 0 12px; padding-top: 12px; font-size: 0.8rem; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.04em; }
-</style>
 </head>
 <body>
     <header class="topbar">
@@ -124,66 +92,14 @@ $isSuperAdmin = $user['role'] === 'super_admin';
                     <th>Scheme</th>
                     <th>Cert #</th>
                     <th>Next Due</th>
-                    <th>Days</th>
                     <th>Status</th>
                     <th>Responsible</th>
-                    <th>Follow-up</th>
                 </tr></thead>
                 <tbody id="results-body"></tbody>
             </table>
             <div id="results-empty-state" class="mgmt-empty hidden">No certifications match these filters.</div>
         </div>
     </main>
-
-    <!-- Log Activity modal -->
-    <div id="notes-modal-overlay" class="cm-modal-overlay hidden">
-        <div class="cm-modal">
-            <div class="cm-modal-header">
-                <h3 id="notes-modal-title">📋 Log Activity</h3>
-                <button id="notes-modal-close" class="cm-modal-close" aria-label="Close">&times;</button>
-            </div>
-
-            <div class="cm-log-row">
-                <div class="cm-log-field">
-                    <label for="log-activity-type">Activity Type</label>
-                    <select id="log-activity-type">
-                        <option value="whatsapp_sent">💬 WhatsApp Sent</option>
-                        <option value="call">📞 Call</option>
-                        <option value="email">✉️ Email</option>
-                        <option value="meeting">🗓️ Meeting</option>
-                        <option value="site_visit">📍 Site Visit</option>
-                        <option value="other">📝 Other</option>
-                    </select>
-                </div>
-                <div class="cm-log-field" id="log-status-field">
-                    <label for="log-status">Update Status</label>
-                    <select id="log-status">
-                        <option value="">— No change —</option>
-                        <option value="active">🟢 Active</option>
-                        <option value="pending">🔵 Pending</option>
-                        <option value="suspended">🟠 Suspended</option>
-                        <option value="expired">🔴 Expired</option>
-                        <option value="withdrawn">⚪ Withdrawn</option>
-                    </select>
-                </div>
-            </div>
-
-            <div class="cm-log-field">
-                <label for="log-notes">Notes</label>
-                <textarea id="log-notes" rows="3" placeholder="What happened?"></textarea>
-            </div>
-
-            <div class="cm-log-field">
-                <label for="log-outcome">Outcome</label>
-                <input type="text" id="log-outcome" placeholder="e.g. Interested — sending quote">
-            </div>
-
-            <button id="notes-add-btn" class="cm-btn-log">Log Activity</button>
-
-            <div class="cm-history-divider">History</div>
-            <div id="notes-list"></div>
-        </div>
-    </div>
 
     <div id="toast" class="toast hidden"></div>
     <script>window.EHS_BASE_URL = "<?= addslashes(ehs_url()) ?>";</script>

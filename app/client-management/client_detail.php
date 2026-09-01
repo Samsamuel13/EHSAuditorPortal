@@ -77,6 +77,7 @@ $activity = $logStmt->fetchAll();
             <span></span>
             <span>
                 <a href="<?= ehs_url('client-management/api/export_client_pdf.php?id=' . (int) $client['id']) ?>" class="btn btn-ghost-light btn-small" style="width:auto; margin-right:8px; display:inline-block;">⬇ Export certification history (PDF)</a>
+                <button id="log-activity-btn" class="btn btn-ghost-light btn-small" style="margin-right:8px;">📋 Log Activity</button>
                 <button id="edit-btn" class="btn btn-primary btn-small">Edit client info</button>
             </span>
         </div>
@@ -320,6 +321,51 @@ $activity = $logStmt->fetchAll();
         </div>
     </div>
 
+    <div id="log-activity-backdrop" class="modal-backdrop hidden">
+        <div class="modal modal-wide">
+            <h2>📋 Log Activity</h2>
+
+            <div class="modal-row">
+                <div>
+                    <label for="log-activity-type">Activity Type</label>
+                    <select id="log-activity-type">
+                        <option value="whatsapp_sent">💬 WhatsApp Sent</option>
+                        <option value="call">📞 Call</option>
+                        <option value="email">✉️ Email</option>
+                        <option value="meeting">🗓️ Meeting</option>
+                        <option value="site_visit">📍 Site Visit</option>
+                        <option value="other">📝 Other</option>
+                    </select>
+                </div>
+                <div id="log-status-field">
+                    <label for="log-status">Update Status</label>
+                    <select id="log-status">
+                        <option value="">— No change —</option>
+                        <option value="active">🟢 Active</option>
+                        <option value="pending">🔵 Pending</option>
+                        <option value="suspended">🟠 Suspended</option>
+                        <option value="expired">🔴 Expired</option>
+                        <option value="withdrawn">⚪ Withdrawn</option>
+                    </select>
+                </div>
+            </div>
+
+            <label for="log-notes">Notes</label>
+            <textarea id="log-notes" rows="3" placeholder="What happened?"></textarea>
+
+            <label for="log-outcome">Outcome</label>
+            <input type="text" id="log-outcome" maxlength="255" placeholder="e.g. Interested — sending quote">
+
+            <div class="modal-actions">
+                <button id="log-activity-cancel" class="btn btn-ghost">Cancel</button>
+                <button id="log-activity-save" class="btn btn-primary">Log Activity</button>
+            </div>
+
+            <h3 style="font-size:0.95rem; margin-top:20px; margin-bottom:8px;">History</h3>
+            <div id="log-activity-list" class="cm-activity-list"></div>
+        </div>
+    </div>
+
     <div id="confirm-backdrop" class="modal-backdrop hidden">
         <div class="modal modal-narrow">
             <h2 id="confirm-title">Confirm</h2>
@@ -336,5 +382,13 @@ $activity = $logStmt->fetchAll();
     <script src="<?= ehs_url('assets/js/session_guard.js') ?>"></script>
     <script src="<?= ehs_url('client-management/assets/js/cm_client_detail.js') ?>"></script>
     <script src="<?= ehs_url('client-management/assets/js/cm_certifications.js') ?>"></script>
+    <script>
+        // Exposed so cm_certifications.js can add a per-certification "Log
+        // Activity" button later (once wired up) that opens this same modal
+        // scoped to one cert, e.g.:
+        //   onclick="cmOpenLogActivity(<?= (int) $client['id'] ?>, cert.id, '<?= addslashes($client['company_name']) ?>')"
+        window.CM_CLIENT_ID = <?= (int) $client['id'] ?>;
+        window.CM_COMPANY_NAME = "<?= addslashes($client['company_name']) ?>";
+    </script>
 </body>
 </html>

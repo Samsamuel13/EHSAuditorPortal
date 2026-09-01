@@ -78,7 +78,7 @@ function crm_normalize_phone(?string $phone): ?string
 {
     if ($phone === null) return null;
     $digits = preg_replace('/\D+/', '', $phone);
-    return $digits === '' ? null : ltrim($digits, '0') ?: $digits;
+    return $digits === '' ? null : (ltrim($digits, '0') ?: $digits);
 }
 
 function crm_normalize_email(?string $email): ?string
