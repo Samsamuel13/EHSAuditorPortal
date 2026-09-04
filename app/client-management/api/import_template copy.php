@@ -34,22 +34,11 @@ $headers = [
     'cycle_stage', 'cert_status', 'responsible_person_name', 'notes',
 ];
 
-$examples = [
-    [
-        'Acme Manufacturing Pte Ltd', '201234567A', 'Manufacturing', '1 Example Ave, Singapore 123456',
-        'Jane Tan', 'HSE Manager', 'EASAN Consulting', '+65 9123 4567', 'jane.tan@acme.example', 'https://acme.example', 'active',
-        'ISO 9001', 'JAS-ANZ', 'CERT-2026-0001', '2026-01-15', '2027-01-15', '2028-01-15', '2029-01-14',
-        'initial', 'active', 'John Lim', 'Migrated from legacy Excel planner',
-    ],
-    [
-        // BizSafe example: 2-year cycle, only ONE surveillance point (not
-        // two like ISO's 3-year cycle) — leave surveillance_2_date blank
-        // for BizSafe rows, same as this example does.
-        'Beta Builders Pte Ltd', '201987654B', 'Construction', '2 Example Rd, Singapore 654321',
-        'Ravi Kumar', 'Safety Officer', '', '+65 9876 5432', 'ravi.kumar@betabuilders.example', '', 'active',
-        'BizSafe Star', '', 'CERT-2026-0002', '2026-03-01', '2027-02-01', '', '2028-01-31',
-        'initial', 'active', '', 'BizSafe Star — 2-year cycle, single surveillance point',
-    ],
+$example = [
+    'Acme Manufacturing Pte Ltd', '201234567A', 'Manufacturing', '1 Example Ave, Singapore 123456',
+    'Jane Tan', 'HSE Manager', 'EASAN Consulting', '+65 9123 4567', 'jane.tan@acme.example', 'https://acme.example', 'active',
+    'ISO 9001', 'JAS-ANZ', 'CERT-2026-0001', '2026-01-15', '2027-01-15', '2028-01-15', '2029-01-14',
+    'initial', 'active', 'John Lim', 'Migrated from legacy Excel planner',
 ];
 
 $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
@@ -59,9 +48,7 @@ $sheet->setTitle('Clients_Certifications');
 foreach ($headers as $i => $h) {
     $col = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($i + 1);
     $sheet->setCellValue($col . '1', $h);
-    foreach ($examples as $rowIdx => $example) {
-        $sheet->setCellValue($col . (2 + $rowIdx), $example[$i]);
-    }
+    $sheet->setCellValue($col . '2', $example[$i]);
     $sheet->getColumnDimension($col)->setWidth(20);
 }
 $sheet->getStyle('A1:V1')->getFont()->setBold(true);
@@ -72,34 +59,29 @@ $sheet->freezePane('A2');
 // re-running an export from the old Excel planner naturally becomes one
 // row per audit-scheme line. Leave scheme_type_name blank to import a
 // client with no certification yet.
-$sheet->setCellValue('A5', 'Notes:');
-$sheet->setCellValue('A6', '- One row per client+certification. Repeat company_name/uen for a client with multiple certifications.');
-$sheet->setCellValue('A7', '- Leave scheme_type_name blank to import a client record with no certification yet.');
-$sheet->setCellValue('A8', '- Dates must be YYYY-MM-DD.');
-$sheet->setCellValue('A9', '- scheme_type_name must exactly match a name on the "Valid Scheme Types" sheet.');
-$sheet->setCellValue('A10', '- Leave surveillance_1_date/surveillance_2_date/expiry_date blank to have them auto-calculated from issue_date, using each scheme\'s own cycle length (see the "Valid Scheme Types" sheet\'s cycle_years column) — same as adding a certification through the portal itself.');
-$sheet->setCellValue('A11', '- A shorter cycle (e.g. BizSafe\'s 2 years) only has ONE surveillance point — leave surveillance_2_date blank for those rows, as in the BizSafe example above.');
-$sheet->getStyle('A5')->getFont()->setBold(true);
+$sheet->setCellValue('A4', 'Notes:');
+$sheet->setCellValue('A5', '- One row per client+certification. Repeat company_name/uen for a client with multiple certifications.');
+$sheet->setCellValue('A6', '- Leave scheme_type_name blank to import a client record with no certification yet.');
+$sheet->setCellValue('A7', '- Dates must be YYYY-MM-DD.');
+$sheet->setCellValue('A8', '- scheme_type_name must exactly match a name on the "Valid Scheme Types" sheet.');
+$sheet->getStyle('A4')->getFont()->setBold(true);
 
 // --- Reference sheet: valid scheme type names, pulled live from the DB ---
 $refSheet = $spreadsheet->createSheet();
 $refSheet->setTitle('Valid Scheme Types');
 $refSheet->setCellValue('A1', 'category');
 $refSheet->setCellValue('B1', 'name');
-$refSheet->setCellValue('C1', 'cycle_years');
-$refSheet->getStyle('A1:C1')->getFont()->setBold(true);
+$refSheet->getStyle('A1:B1')->getFont()->setBold(true);
 
-$stmt = $db->query('SELECT category, name, default_cycle_years FROM cm_scheme_types ORDER BY category, name');
+$stmt = $db->query('SELECT category, name FROM cm_scheme_types ORDER BY category, name');
 $row = 2;
 foreach ($stmt->fetchAll() as $st) {
     $refSheet->setCellValue('A' . $row, $st['category']);
     $refSheet->setCellValue('B' . $row, $st['name']);
-    $refSheet->setCellValue('C' . $row, $st['default_cycle_years']);
     $row++;
 }
 $refSheet->getColumnDimension('A')->setWidth(14);
 $refSheet->getColumnDimension('B')->setWidth(24);
-$refSheet->getColumnDimension('C')->setWidth(12);
 
 $spreadsheet->setActiveSheetIndex(0);
 

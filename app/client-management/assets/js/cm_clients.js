@@ -33,6 +33,11 @@ document.addEventListener('DOMContentLoaded', function () {
         return `<span class="badge cm-badge-${status}">${labels[status] || status}</span>`;
     }
 
+    function entityBadge(entity) {
+        const color = entity === 'Axiscert' ? '#7c3aed' : '#2563eb';
+        return `<span class="badge" style="background:${color}22; color:${color}; border:1px solid ${color}55;">${escapeHtml(entity || 'EHS')}</span>`;
+    }
+
     let schemeTypes = [];
 
     // --- Scheme type filter dropdown (+ first-certification dropdown) ---
@@ -60,6 +65,7 @@ document.addEventListener('DOMContentLoaded', function () {
             q: document.getElementById('filter-q').value.trim(),
             industry: document.getElementById('filter-industry').value.trim(),
             status: document.getElementById('filter-status').value,
+            entity: document.getElementById('filter-entity').value,
             scheme_type_id: document.getElementById('filter-scheme').value,
             expiring_within_days: document.getElementById('filter-expiring').value,
         };
@@ -94,6 +100,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 <td>${escapeHtml(c.industry_sector || '—')}</td>
                 <td>${escapeHtml(c.contact_person || '—')}</td>
                 <td>${escapeHtml(c.consultant || '—')}</td>
+                <td>${entityBadge(c.entity)}</td>
                 <td>${statusBadge(c.status)}</td>
                 <td class="mgmt-actions">
                     <button data-edit="${c.id}">Edit</button>
@@ -122,7 +129,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (next) next.addEventListener('click', () => { page++; load(); });
     }
 
-    ['filter-q', 'filter-industry', 'filter-status', 'filter-scheme', 'filter-expiring'].forEach(id => {
+    ['filter-q', 'filter-industry', 'filter-status', 'filter-entity', 'filter-scheme', 'filter-expiring'].forEach(id => {
         const el = document.getElementById(id);
         el.addEventListener(el.tagName === 'SELECT' ? 'change' : 'input', debounce(() => { page = 1; load(); }, 300));
     });
@@ -130,6 +137,7 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('filter-q').value = '';
         document.getElementById('filter-industry').value = '';
         document.getElementById('filter-status').value = '';
+        document.getElementById('filter-entity').value = '';
         document.getElementById('filter-scheme').value = '';
         document.getElementById('filter-expiring').value = '';
         page = 1;
@@ -163,6 +171,7 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('f-email').value = client ? (client.email || '') : '';
         document.getElementById('f-website').value = client ? (client.website || '') : '';
         document.getElementById('f-status').value = client ? client.status : 'active';
+        document.getElementById('f-entity').value = client ? (client.entity || 'EHS') : 'EHS';
         document.getElementById('f-notes').value = client ? (client.notes || '') : '';
 
         // First-certification section only makes sense when adding a brand
@@ -209,6 +218,7 @@ document.addEventListener('DOMContentLoaded', function () {
             email: document.getElementById('f-email').value.trim(),
             website: document.getElementById('f-website').value.trim(),
             status: document.getElementById('f-status').value,
+            entity: document.getElementById('f-entity').value,
             notes: document.getElementById('f-notes').value.trim(),
         };
 

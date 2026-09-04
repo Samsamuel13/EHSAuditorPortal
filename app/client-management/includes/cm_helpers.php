@@ -95,6 +95,68 @@ function cm_allowed_upload_mimes(): array
 const CM_MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10 MB
 
 /**
+ * The 4-stage renewal follow-up thresholds, counted back from a
+ * certification's next milestone date (whichever CM_CYCLE_MILESTONES
+ * milestone cm_certification_next_due() resolves to). Stage 1 is reached
+ * first (furthest out), Stage 4 last (closest to/past the date).
+ */
+const CM_FOLLOWUP_STAGE_DAYS = [
+    1 => 120, // ~4 months before
+    2 => 60,  // ~2 months before
+    3 => 30,  // 30 days before
+    4 => 4,   // 4 days before
+];
+
+/**
+ * Given a milestone's date and today's date, returns the HIGHEST stage
+ * (1-4) that has been crossed as of today, or null if the date is still
+ * more than Stage 1's threshold away (nothing due yet). "Crossed" means
+ * today is within that many days of the milestone date OR the milestone
+ * date has already passed (an overdue milestone is always at least Stage
+ * 4, and stays there — this function doesn't invent a "Stage 5"; escalation
+ * beyond Stage 4 is shown as "N days overdue" using the existing date math,
+ * not a new stage number).
+ *
+ * Only the highest crossed stage is returned (not a list of all crossed
+ * stages) — per the design agreed for the follow-up dashboard: showing
+ * every previously-crossed stage as a separate open item would be
+ * redundant noise once a later, more urgent stage is also due.
+ */
+function cm_followup_current_stage(?string $milestoneDate, string $today): ?int
+{
+    if ($milestoneDate === null) return null;
+
+    $daysUntil = (strtotime($milestoneDate) - strtotime($today)) / 86400;
+
+    $current = null;
+    foreach (CM_FOLLOWUP_STAGE_DAYS as $stage => $days) {
+        if ($daysUntil <= $days) {
+            $current = $stage;
+        }
+    }
+    return $current;
+}
+
+/** A certification's scheme's default_cycle_years (falls back to 3/ISO if the scheme is somehow missing/deleted). */
+function cm_scheme_cycle_years(PDO $db, int $schemeTypeId): int
+{
+    $stmt = $db->prepare('SELECT default_cycle_years FROM cm_scheme_types WHERE id = :id LIMIT 1');
+    $stmt->execute(['id' => $schemeTypeId]);
+    $years = $stmt->fetchColumn();
+    return $years !== false ? (int) $years : 3;
+}
+
+/**
+ * The two business entities this system's clients belong to, mapped from
+ * an accreditation body: SAC -> EHS Universal; IAS, SIS, and AxisCert ->
+ * Axiscert (SIS operates under IAS, which trades as Axiscert). Anything
+ * unmapped (JAS-ANZ, or no accreditation body recorded) defaults to EHS —
+ * flagged here since that default was an assumption, not something stated
+ * outright; correct it per-client via the Entity dropdown if wrong.
+ */
+const CM_ENTITIES = ['EHS', 'Axiscert'];
+
+/**
  * Read the configured renewal alert thresholds (days), sorted ascending.
  * Falls back to [30, 60, 90] if the setting is missing or malformed —
  * the dashboard should never break just because cm_settings is empty.
@@ -127,27 +189,53 @@ function cm_set_renewal_thresholds(PDO $db, array $thresholds): void
 }
 
 /**
+ * The 3 trackable cycle milestones (1st Certification isn't included —
+ * a certification record existing at all already implies it happened),
+ * mapped to their date column and completion-timestamp column. Shared
+ * between cm_certification_next_due() and the Log Activity "mark complete"
+ * feature so the milestone keys/labels live in exactly one place.
+ */
+const CM_CYCLE_MILESTONES = [
+    'surveillance_1'  => ['label' => 'Surveillance 1',  'date_col' => 'surveillance_1_date', 'completed_col' => 'surveillance_1_completed_at'],
+    'surveillance_2'  => ['label' => 'Surveillance 2',  'date_col' => 'surveillance_2_date', 'completed_col' => 'surveillance_2_completed_at'],
+    'recertification' => ['label' => 'Recertification', 'date_col' => 'expiry_date',          'completed_col' => 'recertification_completed_at'],
+];
+
+/**
  * Given a certification row (must include issue_date, surveillance_1_date,
- * surveillance_2_date, expiry_date), work out which of the four cycle
+ * surveillance_2_date, expiry_date, and — if you want completion to be
+ * factored in — surveillance_1_completed_at, surveillance_2_completed_at,
+ * recertification_completed_at), work out which of the four cycle
  * milestones is "next due" and its date. Mirrors the client's own Excel
  * planner: 1st Certification -> Surveillance 1 -> Surveillance 2 -> Recertification.
  *
- * Logic: of the three forward-looking milestones (surveillance_1,
- * surveillance_2, expiry/recertification), pick the earliest one that is
- * still today-or-future. If all three are in the past (or missing), the
- * certification is overdue for recertification — return the expiry_date
- * (even if null) as the overdue milestone, since that's the one that
- * actually lapses the certificate.
+ * A milestone that's been marked COMPLETE (via Log Activity) is skipped
+ * entirely, regardless of its date — an audit done a little early (or even
+ * a little late but since confirmed done) shouldn't keep showing as the
+ * "next due" item once it's actually been carried out. If the row doesn't
+ * include the *_completed_at columns (older callers, or an explicit column
+ * list that doesn't select them), completion is just treated as unknown/no
+ * — behavior is unchanged from before this feature existed.
+ *
+ * Logic: of the milestones NOT marked complete, pick the earliest one that
+ * is still today-or-future. If all remaining ones are in the past (or
+ * missing), the certification is overdue — return the latest-dated
+ * incomplete milestone. If every milestone is complete, there's nothing
+ * pending.
  */
 function cm_certification_next_due(array $cert, string $today): array
 {
-    $milestones = [
-        ['label' => 'Surveillance 1',  'date' => $cert['surveillance_1_date'] ?? null],
-        ['label' => 'Surveillance 2',  'date' => $cert['surveillance_2_date'] ?? null],
-        ['label' => 'Recertification', 'date' => $cert['expiry_date'] ?? null],
-    ];
+    $milestones = [];
+    foreach (CM_CYCLE_MILESTONES as $m) {
+        $milestones[] = [
+            'label' => $m['label'],
+            'date' => $cert[$m['date_col']] ?? null,
+            'completed' => !empty($cert[$m['completed_col']] ?? null),
+        ];
+    }
+    $pending = array_filter($milestones, fn($m) => !$m['completed']);
 
-    $upcoming = array_filter($milestones, fn($m) => $m['date'] !== null && $m['date'] >= $today);
+    $upcoming = array_filter($pending, fn($m) => $m['date'] !== null && $m['date'] >= $today);
     if ($upcoming) {
         usort($upcoming, fn($a, $b) => strcmp($a['date'], $b['date']));
         $next = $upcoming[0];
@@ -158,7 +246,7 @@ function cm_certification_next_due(array $cert, string $today): array
     // actually set (usually expiry_date/Recertification), so the message
     // reflects the real state instead of always blaming "Recertification"
     // when only an earlier milestone was ever filled in.
-    $past = array_filter($milestones, fn($m) => $m['date'] !== null);
+    $past = array_filter($pending, fn($m) => $m['date'] !== null);
     if ($past) {
         usort($past, fn($a, $b) => strcmp($b['date'], $a['date']));
         $last = $past[0];
@@ -213,6 +301,142 @@ function cm_send_mail(string $to, string $subject, string $htmlBody): bool
         error_log("cm_send_mail: failed to send to $to — subject: $subject");
     }
     return $ok;
+}
+
+/**
+ * Pure calculation: given an anchor date and a cycle length in years,
+ * compute the milestone dates for that cycle. Generalizes the ISO 3-year
+ * convention I confirmed against 265 real certification records (2
+ * surveillance audits, each 1 month before its anniversary; Recertification
+ * 1 month + 1 day before the final anniversary) to any cycle length: an
+ * N-year cycle gets (N-1) evenly-spaced surveillance audits, same -1-month
+ * offset, then Recertification at the N-year mark, same -1-month-1-day offset.
+ *
+ * For $cycleYears = 3 this produces EXACTLY the confirmed formula. For
+ * other lengths (e.g. BizSafe's 2-year cycle, default_cycle_years on
+ * cm_scheme_types) this is an EXTRAPOLATION of that same convention — there
+ * is no existing BizSafe certification data in this system to verify
+ * against, so treat these dates as a reasonable default to confirm with
+ * the actual scheme requirements, not a verified fact the way the 3-year
+ * case is.
+ *
+ * Returns ['surveillances' => [date, date, ...], 'recertification' => date].
+ * The certifications table only has 2 surveillance date columns
+ * (surveillance_1_date, surveillance_2_date), so callers should only use
+ * as many entries from 'surveillances' as they have columns for — a
+ * 2-year cycle naturally produces just 1 entry, leaving surveillance_2_date
+ * unused/null, which cm_certification_next_due() already handles correctly
+ * (a null date is simply skipped).
+ */
+function cm_compute_cycle_milestones(string $anchorDate, int $cycleYears): array
+{
+    $cycleYears = max(1, $cycleYears);
+    $anchor = new DateTime($anchorDate);
+
+    $surveillances = [];
+    for ($year = 1; $year < $cycleYears; $year++) {
+        $surveillances[] = (clone $anchor)->modify("+$year year")->modify('-1 month')->format('Y-m-d');
+    }
+    // Recertification: exactly 1 day before the pure N-year anniversary of
+    // the anchor date — confirmed directly against a real case (anchor
+    // 2026-09-03 -> Recert 2029-09-02). This is NOT chained from the last
+    // surveillance date, and does NOT get the extra -1-month offset the
+    // surveillance points get; an earlier version of this function
+    // mistakenly applied that same -1-month offset to Recertification too
+    // (matching a DIFFERENT confirmed example that turned out to be
+    // coincidental, not the actual rule) — corrected here.
+    $recert = (clone $anchor)->modify("+$cycleYears year")->modify('-1 day')->format('Y-m-d');
+
+    return ['surveillances' => $surveillances, 'recertification' => $recert];
+}
+
+/**
+ * Convenience wrapper for the common case (a certification's own 2
+ * surveillance columns), returning the same [surv1, surv2, expiry] shape
+ * the older 3-year-only version of this function used, so existing callers
+ * don't need to change — surv2 comes back null for anything shorter than a
+ * 3-year cycle.
+ */
+function cm_compute_cycle_milestones_from(string $anchorDate, int $cycleYears = 3): array
+{
+    $result = cm_compute_cycle_milestones($anchorDate, $cycleYears);
+    return [
+        $result['surveillances'][0] ?? null,
+        $result['surveillances'][1] ?? null,
+        $result['recertification'],
+    ];
+}
+
+/**
+ * Fills in any missing surveillance/recertification milestone dates from
+ * issue_date, using this client's actual certification cycle convention:
+ *   Surveillance 1  = issue_date + 1 year MINUS 1 month
+ *   Surveillance 2  = Surveillance 1 + 1 year (i.e. issue_date + 2 years - 1 month)
+ *                     — only for a 3-year cycle; omitted for shorter cycles
+ *   Recertification = final surveillance + 1 year MINUS 1 day
+ * Confirmed directly against a real example row for the 3-year (ISO) case
+ * (1st Cert 2024-02-27 -> Surv 1 2025-01-27, Surv 2 2026-01-27, Recert
+ * 2027-01-26). $cycleYears comes from the certification's scheme
+ * (cm_scheme_types.default_cycle_years) — defaults to 3 (ISO) if not
+ * provided, for backward compatibility with any caller that doesn't pass it.
+ *
+ * Never overwrites a date that's already set — only fills genuine gaps.
+ * No-op if issue_date itself isn't provided, since there's no anchor to
+ * calculate from. Called from certifications.php on both create and
+ * update (and import.php on bulk import), so this is the single place the
+ * "auto-populate if missing" rule lives — not duplicated per caller.
+ */
+function cm_apply_default_cycle_dates(?string $issueDate, ?string $surv1, ?string $surv2, ?string $expiry, int $cycleYears = 3): array
+{
+    if ($issueDate === null) {
+        return [$surv1, $surv2, $expiry];
+    }
+
+    // If surv1 is already given (by the caller or a prior fill), cascade
+    // surv2 from THAT value rather than recomputing from issue_date —
+    // respects a user-provided surv1 even if it doesn't follow the
+    // standard -1-month convention. Recertification, though, is always
+    // computed from the true anchor (issue_date) below — never chained
+    // from surv1/surv2 — since it isn't offset the same way they are.
+    if ($surv1 !== null && $surv2 === null && $cycleYears >= 3) {
+        $surv2 = (new DateTime($surv1))->modify('+1 year')->format('Y-m-d');
+    }
+
+    if ($surv1 === null || $surv2 === null || $expiry === null) {
+        [$defSurv1, $defSurv2, $defExpiry] = cm_compute_cycle_milestones_from($issueDate, $cycleYears);
+        $surv1 = $surv1 ?? $defSurv1;
+        $surv2 = $surv2 ?? $defSurv2;
+        $expiry = $expiry ?? $defExpiry;
+    }
+
+    return [$surv1, $surv2, $expiry];
+}
+
+/**
+ * Auto-expire certifications whose Recertification (expiry_date) date has
+ * passed but whose status is still 'active' or 'pending' — nothing in this
+ * system previously flipped status based on dates, so a cert could sit
+ * showing "Active" indefinitely after its actual expiry date had passed.
+ * Deliberately does NOT touch 'suspended' or 'withdrawn' — those are
+ * explicit manual decisions this shouldn't silently override.
+ *
+ * Called both inline (at the top of the certifications/renewal-dashboard
+ * GET endpoints, so the list is always correct the moment you load it —
+ * a single indexed UPDATE, cheap enough to run on every request) and from
+ * a daily cron as a backstop in case a page just isn't visited for a
+ * while. Returns the number of rows changed, for cron logging.
+ */
+function cm_auto_expire_overdue_certifications(PDO $db): int
+{
+    $stmt = $db->prepare(
+        "UPDATE cm_certifications
+         SET status = 'expired'
+         WHERE status IN ('active', 'pending')
+           AND expiry_date IS NOT NULL
+           AND expiry_date < CURDATE()"
+    );
+    $stmt->execute();
+    return $stmt->rowCount();
 }
 
 /**

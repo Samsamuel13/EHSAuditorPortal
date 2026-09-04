@@ -17,6 +17,10 @@ require_once __DIR__ . '/../includes/cm_helpers.php';
 
 $user = ehs_require_role(['super_admin', 'admin'], true);
 $db = get_db();
+
+// Live auto-expire: keeps the Status column truthful on every load, not
+// just after a daily cron run. Cheap single UPDATE, safe to run per-request.
+cm_auto_expire_overdue_certifications($db);
 $method = $_SERVER['REQUEST_METHOD'];
 $today = date('Y-m-d');
 
@@ -64,9 +68,11 @@ function cm_extract_cert_fields(array $input, PDO $db): array
     $schemeTypeId = (int) ($input['cm_scheme_type_id'] ?? 0);
     if ($schemeTypeId <= 0) cm_json_error('A scheme type is required.', 422);
 
-    $schemeCheck = $db->prepare('SELECT id FROM cm_scheme_types WHERE id = :id LIMIT 1');
+    $schemeCheck = $db->prepare('SELECT id, default_cycle_years FROM cm_scheme_types WHERE id = :id LIMIT 1');
     $schemeCheck->execute(['id' => $schemeTypeId]);
-    if (!$schemeCheck->fetch()) cm_json_error('That scheme type does not exist.', 422);
+    $schemeRow = $schemeCheck->fetch();
+    if (!$schemeRow) cm_json_error('That scheme type does not exist.', 422);
+    $cycleYears = (int) $schemeRow['default_cycle_years'];
 
     $cycleStage = trim((string) ($input['cycle_stage'] ?? 'initial'));
     if (!in_array($cycleStage, ['initial', 'surveillance_1', 'surveillance_2', 'recertification'], true)) {
@@ -92,6 +98,11 @@ function cm_extract_cert_fields(array $input, PDO $db): array
     $surv1Date  = ($input['surveillance_1_date'] ?? '') !== '' ? $input['surveillance_1_date'] : null;
     $surv2Date  = ($input['surveillance_2_date'] ?? '') !== '' ? $input['surveillance_2_date'] : null;
     $expiryDate = ($input['expiry_date'] ?? '') !== '' ? $input['expiry_date'] : null;
+
+    // Auto-populate any missing surveillance/recertification dates from
+    // issue_date, following this scheme's own cycle length (+1yr/-1mo per
+    // step) — never touches a date that was actually provided.
+    [$surv1Date, $surv2Date, $expiryDate] = cm_apply_default_cycle_dates($issueDate, $surv1Date, $surv2Date, $expiryDate, $cycleYears);
 
     // Chronological order across whichever of the 4 milestones are set —
     // mirrors the client's own planner: 1st Cert -> Surveillance 1 ->

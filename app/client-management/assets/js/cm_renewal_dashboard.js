@@ -16,6 +16,9 @@ document.addEventListener('DOMContentLoaded', function () {
         active: '🟢 Active', pending: '🔵 Pending', suspended: '🟠 Suspended',
         expired: '🔴 Expired', withdrawn: '⚪ Withdrawn',
     };
+    const MILESTONE_LABELS = {
+        surveillance_1: 'Surveillance 1', surveillance_2: 'Surveillance 2', recertification: 'Recertification',
+    };
 
     const toastEl = document.getElementById('toast');
     let toastTimer = null;
@@ -71,6 +74,7 @@ document.addEventListener('DOMContentLoaded', function () {
             q: document.getElementById('filter-client-name').value.trim(),
             scheme_category: document.getElementById('filter-scheme-category').value,
             industry: document.getElementById('filter-industry').value.trim(),
+            entity: document.getElementById('filter-entity').value,
             responsible_person_id: document.getElementById('filter-responsible').value,
         };
     }
@@ -97,6 +101,18 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('count-overdue').textContent = data.counts.overdue;
         document.getElementById('widget-near-blink').classList.toggle('hidden', !(data.counts.near > 0));
 
+        const stats = data.stats || {};
+        const milestones = stats.milestones_done_this_month || {};
+        document.getElementById('stat-surv1-done').textContent = milestones.surveillance_1 ?? 0;
+        document.getElementById('stat-surv2-done').textContent = milestones.surveillance_2 ?? 0;
+        document.getElementById('stat-recert-done').textContent = milestones.recertification ?? 0;
+        document.getElementById('stat-activity-total').textContent = stats.activity_logged_this_month ?? 0;
+        document.getElementById('stat-followed-up').textContent = stats.followed_up_count ?? 0;
+        document.getElementById('stat-pending-followup').textContent = stats.pending_followup_count ?? 0;
+        const recencyDays = stats.followup_recency_days ?? 14;
+        document.getElementById('stat-followed-up-label').textContent = `certifications (last ${recencyDays}d)`;
+        document.getElementById('stat-pending-followup-label').textContent = `certifications (no activity in ${recencyDays}d)`;
+
         ['widget-near', 'widget-far', 'widget-overdue'].forEach(id => document.getElementById(id).style.outline = '');
         const activeMap = { near: 'widget-near', far: 'widget-far', overdue: 'widget-overdue' };
         if (activeBucket && activeMap[activeBucket]) {
@@ -110,12 +126,35 @@ document.addEventListener('DOMContentLoaded', function () {
         const certs = data.certifications || [];
         document.getElementById('results-empty-state').classList.toggle('hidden', certs.length > 0);
 
-        body.innerHTML = certs.map(c => {
+        // Merge consecutive rows for the same client (same company appearing
+        // back-to-back because it has multiple certifications due around the
+        // same time) into one visual block: Client + Entity are shown once,
+        // via rowspan, while every certification still gets its own row for
+        // Scheme/Cert #/Next Due/Days/Status/Follow-up — those are genuinely
+        // separate action items and each needs its own "Log Activity" button.
+        let html = '';
+        for (let i = 0; i < certs.length; i++) {
+            const c = certs[i];
             const days = daysInfo(c.next_due.date);
             const dot = days.blink ? `<span class="cm-blink-dot ${days.blink}" title="Needs attention"></span>` : '';
-            return `
-            <tr>
-                <td><a href="${window.EHS_BASE_URL}/client-management/client_detail.php?id=${c.client_id}">${escapeHtml(c.company_name)}</a></td>
+            const entityColor = c.entity === 'Axiscert' ? '#7c3aed' : '#2563eb';
+            const entityBadge = `<span class="badge" style="background:${entityColor}22; color:${entityColor}; border:1px solid ${entityColor}55;" title="${c.client_email ? 'Send from ' + escapeHtml(c.entity || 'EHS') + ' — client email: ' + escapeHtml(c.client_email) : ''}">${escapeHtml(c.entity || 'EHS')}</span>`;
+
+            const isContinuation = i > 0 && certs[i - 1].client_id === c.client_id;
+            let clientCells = '';
+            if (!isContinuation) {
+                let span = 1;
+                while (i + span < certs.length && certs[i + span].client_id === c.client_id) span++;
+                const rowspanAttr = span > 1 ? ` rowspan="${span}"` : '';
+                clientCells = `
+                    <td${rowspanAttr} class="cm-group-cell"><a href="${window.EHS_BASE_URL}/client-management/client_detail.php?id=${c.client_id}">${escapeHtml(c.company_name)}</a></td>
+                    <td${rowspanAttr} class="cm-group-cell">${entityBadge}</td>
+                `;
+            }
+
+            html += `
+            <tr class="${isContinuation ? 'cm-grouped-row' : ''}">
+                ${clientCells}
                 <td>${escapeHtml(c.scheme_name)} (${escapeHtml(c.scheme_category)})</td>
                 <td>${escapeHtml(c.certificate_number || '—')}</td>
                 <td>${escapeHtml(c.next_due.label || '—')}: ${escapeHtml(c.next_due.date || '—')} <span class="badge ${c.next_due.overdue ? 'cm-badge-red' : 'cm-badge-amber'}">${c.next_due.overdue ? 'Overdue' : 'Upcoming'}</span></td>
@@ -123,9 +162,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 <td>${escapeHtml(c.status)}</td>
                 <td>${escapeHtml(c.responsible_person || '—')}</td>
                 <td><button class="btn btn-ghost-light btn-small" style="width:auto;" onclick="cmOpenNotesModal(${c.client_id}, ${c.id}, '${escapeHtml(c.company_name).replace(/'/g, "\\'")}', '${escapeHtml(c.status)}')">Log Activity</button></td>
-            </tr>
-        `;
-        }).join('');
+            </tr>`;
+        }
+        body.innerHTML = html;
     }
 
     document.getElementById('widget-near').addEventListener('click', () => { activeBucket = activeBucket === 'near' ? '' : 'near'; load(); });
@@ -136,7 +175,7 @@ document.addEventListener('DOMContentLoaded', function () {
         let t;
         return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
     }
-    ['filter-client-name', 'filter-scheme-category', 'filter-industry', 'filter-responsible'].forEach(id => {
+    ['filter-client-name', 'filter-scheme-category', 'filter-industry', 'filter-entity', 'filter-responsible'].forEach(id => {
         const el = document.getElementById(id);
         el.addEventListener(el.tagName === 'SELECT' ? 'change' : 'input', debounce(load, 300));
     });
@@ -144,6 +183,7 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('filter-client-name').value = '';
         document.getElementById('filter-scheme-category').value = '';
         document.getElementById('filter-industry').value = '';
+        document.getElementById('filter-entity').value = '';
         document.getElementById('filter-responsible').value = '';
         activeBucket = '';
         load();
@@ -188,17 +228,43 @@ document.addEventListener('DOMContentLoaded', function () {
             const typeLabel = ACTIVITY_TYPE_LABELS[n.activity_type] || '📝 Other';
             const statusChangeLine = n.status_changed_to
                 ? `<div style="margin-top:2px;">Status changed to ${escapeHtml(STATUS_LABELS[n.status_changed_to] || n.status_changed_to)}</div>` : '';
+            const milestoneLine = n.milestone_completed
+                ? `<div style="margin-top:2px;">✅ ${escapeHtml(MILESTONE_LABELS[n.milestone_completed] || n.milestone_completed)} marked complete</div>` : '';
             const outcomeLine = n.outcome
                 ? `<div style="margin-top:2px; color:#374151;"><strong>Outcome:</strong> ${escapeHtml(n.outcome)}</div>` : '';
+            const canUndo = n.previous_state && !n.reverted_at;
+            const revertedLabel = n.reverted_at ? ' <span style="color:#9ca3af; font-style:italic;">(reverted)</span>' : '';
+            const undoLine = canUndo
+                ? `<div style="margin-top:4px;"><button class="cm-undo-btn" data-note-id="${n.id}" style="font-size:0.75rem; padding:1px 8px; border-radius:4px; border:1px solid #d1d5db; background:#fff; cursor:pointer;">Undo</button></div>` : '';
             return `
             <div class="cm-note-entry">
-                <div class="cm-note-meta">${typeLabel} &middot; ${escapeHtml((n.created_at || '').substring(0, 16).replace('T', ' '))} — ${escapeHtml(n.created_by_display_name || '—')}</div>
+                <div class="cm-note-meta">${typeLabel} &middot; ${escapeHtml((n.created_at || '').substring(0, 16).replace('T', ' '))} — ${escapeHtml(n.created_by_display_name || '—')}${revertedLabel}</div>
                 <div>${escapeHtml(n.note)}</div>
                 ${outcomeLine}
                 ${statusChangeLine}
+                ${milestoneLine}
+                ${undoLine}
             </div>
         `;
         }).join('');
+
+        listEl.querySelectorAll('.cm-undo-btn').forEach(btn => {
+            btn.addEventListener('click', function () {
+                const noteId = this.dataset.noteId;
+                if (!confirm('Undo this activity? This restores the certification\'s status and dates to what they were right before this entry, and only works if nothing newer has changed them since.')) return;
+                fetch(API_BASE + '/client_followup_notes.php?id=' + noteId, {
+                    method: 'PUT', headers: csrfHeaders(), body: JSON.stringify({ action: 'undo' }),
+                })
+                    .then(r => r.json().then(body => ({ ok: r.ok, body })))
+                    .then(({ ok, body }) => {
+                        if (!ok) { showToast(body.error || 'Could not undo this activity.', true); return; }
+                        showToast('Activity reverted.');
+                        loadNotes(activeNotesClientId, activeNotesCertId);
+                        load(); // refresh the table — status/next-due may have changed back
+                    })
+                    .catch(() => showToast('Network error — please try again.', true));
+            });
+        });
     }
 
     function loadNotes(clientId, certId) {
@@ -220,6 +286,7 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('notes-modal-title').textContent = '📋 Log Activity — ' + companyName;
         document.getElementById('log-activity-type').value = 'whatsapp_sent';
         document.getElementById('log-status').value = '';
+        document.getElementById('log-milestone').value = '';
         document.getElementById('log-notes').value = '';
         document.getElementById('log-outcome').value = '';
         document.getElementById('notes-list').innerHTML = '<div class="cm-note-empty">Loading…</div>';
@@ -237,7 +304,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (e.target === this) closeNotesModal();
     });
 
-    document.getElementById('notes-add-btn').addEventListener('click', function () {
+    function submitLogActivity(confirmOutOfOrder) {
         const note = document.getElementById('log-notes').value.trim();
         if (!note) { showToast('Notes cannot be empty.', true); return; }
         if (!activeNotesClientId) return;
@@ -249,6 +316,8 @@ document.addEventListener('DOMContentLoaded', function () {
             note,
             outcome: document.getElementById('log-outcome').value.trim(),
             new_status: document.getElementById('log-status').value,
+            milestone_completed: document.getElementById('log-milestone').value,
+            confirm_out_of_order: !!confirmOutOfOrder,
         };
 
         fetch(API_BASE + '/client_followup_notes.php', {
@@ -258,16 +327,30 @@ document.addEventListener('DOMContentLoaded', function () {
         })
             .then(r => r.json().then(body => ({ ok: r.ok, body })))
             .then(({ ok, body }) => {
-                if (!ok) { showToast(body.error || 'Could not log this activity.', true); return; }
+                if (!ok) {
+                    // Backend is asking for confirmation, not rejecting —
+                    // Surv 1 and/or 2 wasn't marked done yet, and completing
+                    // Recertification now would still roll the cycle
+                    // forward. Re-submit with confirmation if they say yes.
+                    if (body.requires_confirmation === 'out_of_order_recert' && confirm(body.error + '\n\nProceed anyway?')) {
+                        submitLogActivity(true);
+                        return;
+                    }
+                    showToast(body.error || 'Could not log this activity.', true);
+                    return;
+                }
                 document.getElementById('log-notes').value = '';
                 document.getElementById('log-outcome').value = '';
                 document.getElementById('log-status').value = '';
+                document.getElementById('log-milestone').value = '';
                 loadNotes(activeNotesClientId, activeNotesCertId);
-                showToast(body.status_changed_to ? 'Activity logged — status updated.' : 'Activity logged.');
-                if (body.status_changed_to) load(); // refresh the table so the Status column reflects the change
+                showToast(body.cycle_rolled_over ? 'Recertification complete — new certification cycle started.' : (body.milestone_completed ? 'Activity logged — milestone marked complete.' : (body.status_changed_to ? 'Activity logged — status updated.' : 'Activity logged.')));
+                if (body.status_changed_to || body.milestone_completed) load(); // refresh the table — Status and/or Next Due/Days may have changed
             })
             .catch(() => showToast('Network error — please try again.', true));
-    });
+    }
+
+    document.getElementById('notes-add-btn').addEventListener('click', () => submitLogActivity(false));
 
     loadResponsibleFilter();
     fetch(API_BASE + '/renewal_dashboard.php')

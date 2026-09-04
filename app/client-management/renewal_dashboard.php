@@ -58,6 +58,13 @@ $isSuperAdmin = $user['role'] === 'super_admin';
     /* Small blinking badge pinned to the top-right corner of a widget card */
     .cm-widget-blink { position: absolute; top: 10px; right: 12px; width: 12px; height: 12px; border-radius: 50%; background: #d97706; color: #d97706; animation: cm-blink 1.1s ease-in-out infinite; }
     .dash-card { position: relative; }
+
+    /* Grouped rows: same client's multiple certifications share one
+       Client/Entity cell (rowspan) — these rules keep the spanned cell
+       vertically centered and lighten the border between grouped rows so
+       they read as one block instead of unrelated rows. */
+    .cm-group-cell { vertical-align: middle; }
+    .cm-grouped-row td { border-top: 1px dashed #e5e7eb; }
 </style>
 </head>
 <body>
@@ -90,6 +97,11 @@ $isSuperAdmin = $user['role'] === 'super_admin';
                 <option value="Other">Other</option>
             </select>
             <input type="text" id="filter-industry" placeholder="Industry sector">
+            <select id="filter-entity">
+                <option value="">All entities</option>
+                <option value="EHS">EHS</option>
+                <option value="Axiscert">Axiscert</option>
+            </select>
             <select id="filter-responsible">
                 <option value="">All responsible persons</option>
             </select>
@@ -112,6 +124,38 @@ $isSuperAdmin = $user['role'] === 'super_admin';
             </div>
         </div>
 
+        <h2 style="font-size:0.95rem; margin-top:20px; color:var(--muted, #6b7280); text-transform:uppercase; letter-spacing:0.04em;">This Month — Milestones Completed</h2>
+        <div class="dash-grid" style="grid-template-columns: repeat(4, 1fr);">
+            <div class="dash-card">
+                <h3>Surveillance 1</h3>
+                <div class="stat-row"><span class="stat-number" id="stat-surv1-done">—</span><span class="stat-label">done</span></div>
+            </div>
+            <div class="dash-card">
+                <h3>Surveillance 2</h3>
+                <div class="stat-row"><span class="stat-number" id="stat-surv2-done">—</span><span class="stat-label">done</span></div>
+            </div>
+            <div class="dash-card">
+                <h3>Recertification</h3>
+                <div class="stat-row"><span class="stat-number" id="stat-recert-done">—</span><span class="stat-label">done</span></div>
+            </div>
+            <div class="dash-card">
+                <h3>Total Activity</h3>
+                <div class="stat-row"><span class="stat-number" id="stat-activity-total">—</span><span class="stat-label">logged</span></div>
+            </div>
+        </div>
+
+        <h2 style="font-size:0.95rem; margin-top:20px; color:var(--muted, #6b7280); text-transform:uppercase; letter-spacing:0.04em;">Follow-up Status <span style="text-transform:none; font-weight:400;">(of what's shown below)</span></h2>
+        <div class="dash-grid" style="grid-template-columns: repeat(2, 1fr);">
+            <div class="dash-card">
+                <h3>Followed Up</h3>
+                <div class="stat-row"><span class="stat-number" id="stat-followed-up" style="color:#16a34a;">—</span><span class="stat-label" id="stat-followed-up-label">certifications</span></div>
+            </div>
+            <div class="dash-card">
+                <h3>Pending Follow-up</h3>
+                <div class="stat-row"><span class="stat-number" id="stat-pending-followup" style="color:#b45309;">—</span><span class="stat-label" id="stat-pending-followup-label">certifications</span></div>
+            </div>
+        </div>
+
         <?php if ($isSuperAdmin): ?>
         <div class="cm-section-placeholder" style="text-align:left; margin-top:16px;">
             <strong>Alert thresholds (days)</strong> — Super Admin only. Controls the widget/bucket boundaries above.
@@ -126,11 +170,35 @@ $isSuperAdmin = $user['role'] === 'super_admin';
         </div>
         <?php endif; ?>
 
+        <h2 style="font-size:1.05rem; margin-top:24px; display:flex; justify-content:space-between; align-items:center;">
+            <span>📋 Today's Renewal Follow-ups</span>
+            <span id="followup-today-count" class="badge" style="background:#fee2e2; color:#b91c1c;">—</span>
+        </h2>
+        <p style="color:var(--muted, #6b7280); margin-top:-8px; font-size:0.85rem;">
+            Companies that have crossed a follow-up stage (4 months / 2 months / 30 days / 4 days before their next Surveillance or Recertification) and haven't been actioned for that stage yet.
+        </p>
+        <div class="mgmt-table-wrap">
+            <table class="mgmt-table">
+                <thead><tr>
+                    <th>Client</th>
+                    <th>Entity</th>
+                    <th>Milestone</th>
+                    <th>Stage</th>
+                    <th>Due</th>
+                    <th>Responsible</th>
+                    <th></th>
+                </tr></thead>
+                <tbody id="followup-today-body"></tbody>
+            </table>
+            <div id="followup-today-empty" class="mgmt-empty hidden">Nothing due for follow-up right now.</div>
+        </div>
+
         <h2 style="font-size:1.05rem; margin-top:24px;" id="list-title">All certifications with an expiry date</h2>
         <div class="mgmt-table-wrap">
             <table class="mgmt-table">
                 <thead><tr>
                     <th>Client</th>
+                    <th>Entity</th>
                     <th>Scheme</th>
                     <th>Cert #</th>
                     <th>Next Due</th>
@@ -145,6 +213,31 @@ $isSuperAdmin = $user['role'] === 'super_admin';
         </div>
     </main>
 
+    <!-- Mark stage follow-up modal -->
+    <div id="stage-followup-modal-overlay" class="cm-modal-overlay hidden">
+        <div class="cm-modal">
+            <div class="cm-modal-header">
+                <h3 id="stage-followup-modal-title">Mark Follow-up</h3>
+                <button id="stage-followup-modal-close" class="cm-modal-close" aria-label="Close">&times;</button>
+            </div>
+            <div class="cm-log-field">
+                <label for="stage-followup-note">Note</label>
+                <textarea id="stage-followup-note" rows="3" placeholder="What did you do / find out?"></textarea>
+            </div>
+            <button id="stage-followup-save-btn" class="cm-btn-log">Mark Followed Up</button>
+        </div>
+    </div>
+
+    <!-- Per-company follow-up stage history modal -->
+    <div id="followup-history-modal-overlay" class="cm-modal-overlay hidden">
+        <div class="cm-modal">
+            <div class="cm-modal-header">
+                <h3 id="followup-history-modal-title">Follow-up Stage History</h3>
+                <button id="followup-history-modal-close" class="cm-modal-close" aria-label="Close">&times;</button>
+            </div>
+            <div id="followup-history-list"></div>
+        </div>
+    </div>
     <!-- Log Activity modal -->
     <div id="notes-modal-overlay" class="cm-modal-overlay hidden">
         <div class="cm-modal">
@@ -179,6 +272,16 @@ $isSuperAdmin = $user['role'] === 'super_admin';
             </div>
 
             <div class="cm-log-field">
+                <label for="log-milestone">Mark Milestone Complete</label>
+                <select id="log-milestone">
+                    <option value="">— None —</option>
+                    <option value="surveillance_1">✅ Surveillance 1</option>
+                    <option value="surveillance_2">✅ Surveillance 2</option>
+                    <option value="recertification">✅ Recertification</option>
+                </select>
+            </div>
+
+            <div class="cm-log-field">
                 <label for="log-notes">Notes</label>
                 <textarea id="log-notes" rows="3" placeholder="What happened?"></textarea>
             </div>
@@ -198,6 +301,20 @@ $isSuperAdmin = $user['role'] === 'super_admin';
     <div id="toast" class="toast hidden"></div>
     <script>window.EHS_BASE_URL = "<?= addslashes(ehs_url()) ?>";</script>
     <script src="<?= ehs_url('assets/js/session_guard.js') ?>"></script>
-    <script src="<?= ehs_url('client-management/assets/js/cm_renewal_dashboard.js') ?>"></script>
+    <?php
+        // Cache-busting: append the file's actual last-modified time as a
+        // query string, so every deploy that changes this JS automatically
+        // gets a new URL and browsers/CDNs can't serve a stale cached copy
+        // silently — this exact class of bug (page HTML updated, old JS
+        // still cached) has caused real column-misalignment before.
+        $cmRenewalJsPath = __DIR__ . '/assets/js/cm_renewal_dashboard.js';
+        $cmRenewalJsVer = file_exists($cmRenewalJsPath) ? filemtime($cmRenewalJsPath) : time();
+    ?>
+    <script src="<?= ehs_url('client-management/assets/js/cm_renewal_dashboard.js') ?>?v=<?= $cmRenewalJsVer ?>"></script>
+    <?php
+        $cmFollowupsJsPath = __DIR__ . '/assets/js/cm_renewal_followups.js';
+        $cmFollowupsJsVer = file_exists($cmFollowupsJsPath) ? filemtime($cmFollowupsJsPath) : time();
+    ?>
+    <script src="<?= ehs_url('client-management/assets/js/cm_renewal_followups.js') ?>?v=<?= $cmFollowupsJsVer ?>"></script>
 </body>
 </html>

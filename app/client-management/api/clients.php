@@ -41,6 +41,7 @@ if ($method === 'GET') {
     $q          = trim((string) ($_GET['q'] ?? ''));
     $industry   = trim((string) ($_GET['industry'] ?? ''));
     $status     = trim((string) ($_GET['status'] ?? ''));
+    $entity     = trim((string) ($_GET['entity'] ?? ''));
     $schemeId   = (int) ($_GET['scheme_type_id'] ?? 0);
     $expiringWithinDays = isset($_GET['expiring_within_days']) ? (int) $_GET['expiring_within_days'] : null;
 
@@ -65,6 +66,10 @@ if ($method === 'GET') {
     if ($status !== '' && in_array($status, $validStatuses, true)) {
         $where[] = 'c.status = :status';
         $params['status'] = $status;
+    }
+    if ($entity !== '' && in_array($entity, CM_ENTITIES, true)) {
+        $where[] = 'c.entity = :entity';
+        $params['entity'] = $entity;
     }
 
     // Scheme-type / expiry filters require joining to certifications. Use a
@@ -125,6 +130,11 @@ function cm_extract_client_fields(array $input): array
         cm_json_error('Email address is not valid.', 422);
     }
 
+    $entity = trim((string) ($input['entity'] ?? 'EHS'));
+    if (!in_array($entity, CM_ENTITIES, true)) {
+        $entity = 'EHS';
+    }
+
     return [
         'company_name'        => $companyName,
         'uen_registration_no' => cm_clean_str($input['uen_registration_no'] ?? null, 50),
@@ -137,6 +147,7 @@ function cm_extract_client_fields(array $input): array
         'email'               => $email,
         'website'             => cm_clean_str($input['website'] ?? null, 255),
         'status'              => $status,
+        'entity'              => $entity,
         'notes'               => cm_clean_str($input['notes'] ?? null, 65535),
     ];
 }
@@ -168,10 +179,10 @@ if ($method === 'POST') {
     $stmt = $db->prepare(
         'INSERT INTO cm_clients
             (company_name, uen_registration_no, industry_sector, address, contact_person,
-             contact_designation, consultant, phone, email, website, status, notes)
+             contact_designation, consultant, phone, email, website, status, entity, notes)
          VALUES
             (:company_name, :uen_registration_no, :industry_sector, :address, :contact_person,
-             :contact_designation, :consultant, :phone, :email, :website, :status, :notes)'
+             :contact_designation, :consultant, :phone, :email, :website, :status, :entity, :notes)'
     );
     try {
         $stmt->execute($fields);
@@ -218,7 +229,7 @@ if ($method === 'PUT') {
             company_name = :company_name, uen_registration_no = :uen_registration_no,
             industry_sector = :industry_sector, address = :address, contact_person = :contact_person,
             contact_designation = :contact_designation, consultant = :consultant, phone = :phone, email = :email,
-            website = :website, status = :status, notes = :notes
+            website = :website, status = :status, entity = :entity, notes = :notes
          WHERE id = :id'
     );
     try {

@@ -28,6 +28,27 @@ if (php_sapi_name() !== 'cli') {
     die('This script is for command-line/cron use only.');
 }
 
+// ============================================================
+// DISABLED as of the 4-stage renewal follow-up build.
+// ============================================================
+// This script and its table (cm_renewal_alerts) are INTENTIONALLY left
+// fully intact — nothing was deleted, per instruction. This early-exit is
+// the ONLY change: it stops this script from actually sending anything,
+// so it can't fire duplicate/overlapping notifications alongside the new
+// cm_renewal_followup_actions system (client-management/api/renewal_followups.php),
+// which covers the same "who needs a nudge" purpose with a materially
+// different (and now the primary) 4-stage model.
+//
+// TO RE-ENABLE: delete/comment out the exit() line immediately below.
+// You should ALSO remove or disable the actual cPanel Cron Jobs entry
+// calling this script — this code-level guard is a safety net, but the
+// real "off switch" is removing the cron trigger itself in cPanel, since
+// I can't do that from here. If the crontab entry is still active, this
+// guard just makes each run a harmless no-op instead of actually
+// disabling the schedule.
+exit(0);
+// ============================================================
+
 require_once __DIR__ . '/../../config.php';
 require_once __DIR__ . '/../includes/cm_helpers.php';
 

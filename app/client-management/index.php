@@ -47,6 +47,11 @@ $user = ehs_require_role(['super_admin', 'admin']);
                 <option value="withdrawn">Withdrawn</option>
                 <option value="blacklisted">Blacklisted</option>
             </select>
+            <select id="filter-entity">
+                <option value="">All entities</option>
+                <option value="EHS">EHS</option>
+                <option value="Axiscert">Axiscert</option>
+            </select>
             <select id="filter-scheme">
                 <option value="">All scheme types</option>
             </select>
@@ -75,6 +80,7 @@ $user = ehs_require_role(['super_admin', 'admin']);
                     <th>Industry</th>
                     <th>Contact</th>
                     <th>Consultant</th>
+                    <th>Entity</th>
                     <th>Status</th>
                     <th></th>
                 </tr></thead>
@@ -113,6 +119,16 @@ $user = ehs_require_role(['super_admin', 'admin']);
                         <option value="suspended">Suspended</option>
                         <option value="withdrawn">Withdrawn</option>
                         <option value="blacklisted">Blacklisted</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="modal-row">
+                <div>
+                    <label for="f-entity">Entity</label>
+                    <select id="f-entity">
+                        <option value="EHS">EHS</option>
+                        <option value="Axiscert">Axiscert</option>
                     </select>
                 </div>
             </div>

@@ -71,6 +71,10 @@ $activity = $logStmt->fetchAll();
             <span class="badge cm-badge-<?= htmlspecialchars($client['status']) ?>" style="vertical-align:middle; margin-left:8px;">
                 <?= htmlspecialchars(ucfirst($client['status'])) ?>
             </span>
+            <?php $entityColor = ($client['entity'] ?? 'EHS') === 'Axiscert' ? '#7c3aed' : '#2563eb'; ?>
+            <span class="badge" style="vertical-align:middle; margin-left:6px; background:<?= $entityColor ?>22; color:<?= $entityColor ?>; border:1px solid <?= $entityColor ?>55;">
+                <?= htmlspecialchars($client['entity'] ?? 'EHS') ?>
+            </span>
         </h1>
 
         <div class="mgmt-toolbar">
@@ -162,6 +166,17 @@ $activity = $logStmt->fetchAll();
                     <select id="f-status">
                         <?php foreach (['active', 'suspended', 'withdrawn', 'blacklisted'] as $s): ?>
                             <option value="<?= $s ?>" <?= $client['status'] === $s ? 'selected' : '' ?>><?= ucfirst($s) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+            </div>
+
+            <div class="modal-row">
+                <div>
+                    <label for="f-entity">Entity</label>
+                    <select id="f-entity">
+                        <?php foreach (['EHS', 'Axiscert'] as $e): ?>
+                            <option value="<?= $e ?>" <?= ($client['entity'] ?? 'EHS') === $e ? 'selected' : '' ?>><?= $e ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>
@@ -325,6 +340,11 @@ $activity = $logStmt->fetchAll();
         <div class="modal modal-wide">
             <h2>📋 Log Activity</h2>
 
+            <label for="log-cert-select">Certification</label>
+            <select id="log-cert-select" style="margin-bottom: 14px;">
+                <option value="">— General (not tied to a specific certification) —</option>
+            </select>
+
             <div class="modal-row">
                 <div>
                     <label for="log-activity-type">Activity Type</label>
@@ -346,6 +366,18 @@ $activity = $logStmt->fetchAll();
                         <option value="suspended">🟠 Suspended</option>
                         <option value="expired">🔴 Expired</option>
                         <option value="withdrawn">⚪ Withdrawn</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="modal-row" id="log-milestone-field">
+                <div>
+                    <label for="log-milestone">Mark Milestone Complete</label>
+                    <select id="log-milestone">
+                        <option value="">— None —</option>
+                        <option value="surveillance_1">✅ Surveillance 1</option>
+                        <option value="surveillance_2">✅ Surveillance 2</option>
+                        <option value="recertification">✅ Recertification</option>
                     </select>
                 </div>
             </div>
@@ -382,6 +414,7 @@ $activity = $logStmt->fetchAll();
     <script src="<?= ehs_url('assets/js/session_guard.js') ?>"></script>
     <script src="<?= ehs_url('client-management/assets/js/cm_client_detail.js') ?>"></script>
     <script src="<?= ehs_url('client-management/assets/js/cm_certifications.js') ?>"></script>
+    <script src="<?= ehs_url('client-management/assets/js/cm_milestone_badges.js') ?>"></script>
     <script>
         // Exposed so cm_certifications.js can add a per-certification "Log
         // Activity" button later (once wired up) that opens this same modal

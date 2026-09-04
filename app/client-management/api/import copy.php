@@ -438,16 +438,6 @@ if ($method === 'POST' && $action === 'commit') {
                 $schemeIdStmt->execute(['name' => $d['scheme_type_name']]);
                 $schemeId = $schemeIdStmt->fetchColumn();
 
-                // Same auto-fill the UI uses: leave Surv 1/2 or Recert blank
-                // in the spreadsheet and they're computed from issue_date,
-                // using THIS scheme's own cycle length (2 years for BizSafe,
-                // 3 for ISO, etc.) — never overwrites a date the row actually
-                // provided.
-                $cycleYears = $schemeId ? cm_scheme_cycle_years($db, (int) $schemeId) : 3;
-                [$fillSurv1, $fillSurv2, $fillExpiry] = cm_apply_default_cycle_dates(
-                    $d['issue_date'], $d['surveillance_1_date'], $d['surveillance_2_date'], $d['expiry_date'], $cycleYears
-                );
-
                 $insertCert = $db->prepare(
                     'INSERT INTO cm_certifications
                         (cm_client_id, cm_scheme_type_id, accreditation_body, certificate_number,
@@ -461,8 +451,8 @@ if ($method === 'POST' && $action === 'commit') {
                 $insertCert->execute([
                     'client_id' => $clientId, 'scheme_id' => $schemeId,
                     'accreditation_body' => $d['accreditation_body'], 'certificate_number' => $d['certificate_number'],
-                    'issue_date' => $d['issue_date'], 'surveillance_1_date' => $fillSurv1,
-                    'surveillance_2_date' => $fillSurv2, 'expiry_date' => $fillExpiry,
+                    'issue_date' => $d['issue_date'], 'surveillance_1_date' => $d['surveillance_1_date'],
+                    'surveillance_2_date' => $d['surveillance_2_date'], 'expiry_date' => $d['expiry_date'],
                     'cycle_stage' => $d['cycle_stage'], 'status' => $d['cert_status'],
                     'responsible_person_name' => $d['responsible_person_name'], 'notes' => $d['notes'],
                 ]);
