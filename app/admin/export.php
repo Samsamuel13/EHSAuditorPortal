@@ -15,24 +15,12 @@ $defaultMonth = date('Y-m');
 <link rel="stylesheet" href="<?= ehs_url('assets/css/management.css') ?>">
 </head>
 <body>
-    <header class="topbar">
-        <span class="topbar-brand">
-            <img src="<?= ehs_url('assets/img/logo.png') ?>" alt="EHS Universal" class="topbar-logo">
-            <span class="topbar-subtitle">Auditor Scheduler</span>
-        </span>
-        <span class="topbar-user">
-            <?= htmlspecialchars($user['name']) ?>
-            &middot; <a href="<?= ehs_url('admin/index.php') ?>">Dashboard</a>
-            &middot; <a href="<?= ehs_url('admin/schedule.php') ?>">Master Schedule</a>
-            &middot; <a href="<?= ehs_url('logout.php') ?>">Log out</a>
-        </span>
-    </header>
-
+            <?php $activePage = 'export'; require __DIR__ . '/../includes/sidebar_nav.php'; ?>
     <div class="back-nav">
         <button onclick="history.back()" class="btn btn-ghost-light btn-small back-btn">&larr; Back</button>
     </div>
 
-    <main class="page">
+        <main class="app-main page">
         <h1>Export monthly schedule</h1>
         <p class="field-hint">
             Exports the full month grid (every active auditor, every audit) —
@@ -50,6 +38,7 @@ $defaultMonth = date('Y-m');
             </div>
         </div>
     </main>
+    </div>
 
     <script>window.EHS_BASE_URL = "<?= addslashes(ehs_url()) ?>";</script>
     <script src="<?= ehs_url('assets/js/session_guard.js') ?>"></script>

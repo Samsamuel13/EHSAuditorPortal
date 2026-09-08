@@ -14,24 +14,12 @@ $user = ehs_require_role(['super_admin', 'admin']);
 <link rel="stylesheet" href="<?= ehs_url('assets/css/management.css') ?>">
 </head>
 <body>
-    <header class="topbar">
-        <span class="topbar-brand">
-            <img src="<?= ehs_url('assets/img/logo.png') ?>" alt="EHS Universal" class="topbar-logo">
-            <span class="topbar-subtitle">Auditor Scheduler</span>
-        </span>
-        <span class="topbar-user">
-            <?= htmlspecialchars($user['name']) ?>
-            &middot; <a href="<?= ehs_url('admin/index.php') ?>">Dashboard</a>
-            &middot; <a href="<?= ehs_url('admin/schedule.php') ?>">Master Schedule</a>
-            &middot; <a href="<?= ehs_url('logout.php') ?>">Log out</a>
-        </span>
-    </header>
-
+            <?php $activePage = 'clients'; require __DIR__ . '/../includes/sidebar_nav.php'; ?>
     <div class="back-nav">
         <button onclick="history.back()" class="btn btn-ghost-light btn-small back-btn">&larr; Back</button>
     </div>
 
-    <main class="page">
+        <main class="app-main page">
         <h1>Clients</h1>
 
         <div class="mgmt-toolbar">
@@ -47,6 +35,7 @@ $user = ehs_require_role(['super_admin', 'admin']);
             <div id="empty-state" class="mgmt-empty hidden">No clients yet.</div>
         </div>
     </main>
+    </div>
 
     <div id="modal-backdrop" class="modal-backdrop hidden">
         <div class="modal">

@@ -17,23 +17,8 @@ $user = ehs_require_role(['super_admin', 'admin']);
 <link rel="stylesheet" href="<?= ehs_url('client-management/assets/css/cm.css') ?>">
 </head>
 <body>
-    <header class="topbar">
-        <span class="topbar-brand">
-            <img src="<?= ehs_url('assets/img/logo.png') ?>" alt="EHS Universal" class="topbar-logo">
-            <span class="topbar-subtitle">Client Management</span>
-        </span>
-        <span class="topbar-user">
-            <?= htmlspecialchars($user['name']) ?>
-            &middot; <a href="<?= ehs_url('client-management/index.php') ?>">Client Directory</a>
-            &middot; <a href="<?= ehs_url('client-management/renewal_dashboard.php') ?>">Renewal Dashboard</a>
-            &middot; <a href="<?= ehs_url('client-management/audit_extract.php') ?>">Audit Extract</a>
-            &middot; <a href="<?= ehs_url('crm/index.php') ?>">CRM</a>
-            &middot; <a href="<?= ehs_url('admin/index.php') ?>">Scheduler Dashboard</a>
-            &middot; <a href="<?= ehs_url('logout.php') ?>">Log out</a>
-        </span>
-    </header>
-
-    <main class="page">
+            <?php $activePage = 'cm_import'; require __DIR__ . '/../includes/sidebar_nav.php'; ?>
+    <main class="app-main page">
         <h1>Bulk Import</h1>
         <p style="color:var(--muted); font-size:0.9rem; max-width:640px;">
             Import client and certification records from a CSV or Excel file — one row per
@@ -72,6 +57,7 @@ $user = ehs_require_role(['super_admin', 'admin']);
 
         <div id="commit-result-box" class="cm-section-placeholder hidden" style="text-align:left; margin-top:16px;"></div>
     </main>
+    </div>
 
     <div id="toast" class="toast hidden"></div>
     <script>window.EHS_BASE_URL = "<?= addslashes(ehs_url()) ?>";</script>

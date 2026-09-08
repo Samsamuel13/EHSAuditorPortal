@@ -17,23 +17,8 @@ $user = ehs_require_role(['super_admin', 'admin']);
 <link rel="stylesheet" href="<?= ehs_url('assets/css/dashboard.css') ?>">
 </head>
 <body>
-    <header class="topbar">
-        <span class="topbar-brand">
-            <img src="<?= ehs_url('assets/img/logo.png') ?>" alt="EHS Universal" class="topbar-logo">
-            <span class="topbar-subtitle">Auditor Scheduler</span>
-        </span>
-        <span class="topbar-user">
-            <?= htmlspecialchars($user['name']) ?> (<?= htmlspecialchars($user['role']) ?>)
-            &middot; <a href="<?= ehs_url('admin/schedule.php') ?>">Master Schedule</a>
-            &middot; <a href="<?= ehs_url('admin/day_schedule.php') ?>">My Day Schedule</a>
-            &middot; <a href="<?= ehs_url('client-management/index.php') ?>">Client Management</a>
-            &middot; <a href="<?= ehs_url('crm/index.php') ?>">CRM</a>
-            &middot; <a href="<?= ehs_url('admin/profile.php') ?>">My Account</a>
-            &middot; <a href="<?= ehs_url('logout.php') ?>">Log out</a>
-        </span>
-    </header>
-
-    <main class="page">
+            <?php $activePage = ''; require __DIR__ . '/../includes/sidebar_nav.php'; ?>
+    <main class="app-main page">
         <h1>Admin Dashboard</h1>
         <p>Logged in as <strong><?= htmlspecialchars($user['name']) ?></strong>.</p>
         <p><a href="<?= ehs_url('admin/schedule.php') ?>" class="btn btn-primary" style="width:auto; display:inline-block;">Open Master Schedule →</a></p>
@@ -88,6 +73,7 @@ $user = ehs_require_role(['super_admin', 'admin']);
             </div>
         </div>
     </main>
+    </div>
 
     <div id="toast" class="toast hidden"></div>
 

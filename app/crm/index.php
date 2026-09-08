@@ -16,22 +16,8 @@ $user = ehs_require_role(['super_admin', 'admin']);
 <link rel="stylesheet" href="<?= ehs_url('crm/assets/css/crm.css') ?>">
 </head>
 <body class="bg-light">
-    <header class="crm-topbar">
-        <span>
-            <img src="<?= ehs_url('assets/img/logo.png') ?>" alt="EHS Universal" class="crm-topbar-logo">
-            <strong>CRM — Lead Pipeline</strong>
-        </span>
-        <span>
-            <?= htmlspecialchars($user['name']) ?>
-            <a href="<?= ehs_url('crm/index.php') ?>"><i class="bi bi-kanban"></i> Board</a>
-            <a href="<?= ehs_url('crm/list.php') ?>"><i class="bi bi-list-ul"></i> List</a>
-            <a href="<?= ehs_url('admin/index.php') ?>"><i class="bi bi-calendar3"></i> Scheduler</a>
-            <a href="<?= ehs_url('client-management/index.php') ?>"><i class="bi bi-building"></i> Client Mgmt</a>
-            <a href="<?= ehs_url('logout.php') ?>"><i class="bi bi-box-arrow-right"></i> Log out</a>
-        </span>
-    </header>
-
-    <main class="container-fluid py-3">
+            <?php $activePage = 'crm_board'; require __DIR__ . '/../includes/sidebar_nav.php'; ?>
+    <main class="app-main container-fluid py-3">
         <!-- Dashboard widgets -->
         <div class="row g-3 mb-3" id="dashboard-widgets">
             <div class="col-6 col-md-3">
@@ -78,6 +64,7 @@ $user = ehs_require_role(['super_admin', 'admin']);
 
         <div class="crm-board" id="board"></div>
     </main>
+    </div>
 
     <!-- New Lead modal -->
     <div class="modal fade" id="modal-new-lead" tabindex="-1">

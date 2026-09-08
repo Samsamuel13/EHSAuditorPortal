@@ -16,24 +16,12 @@ $user = ehs_require_role(['super_admin', 'admin']);
 <link rel="stylesheet" href="<?= ehs_url('assets/css/management.css') ?>">
 </head>
 <body>
-    <header class="topbar">
-        <span class="topbar-brand">
-            <img src="<?= ehs_url('assets/img/logo.png') ?>" alt="EHS Universal" class="topbar-logo">
-            <span class="topbar-subtitle">Auditor Scheduler</span>
-        </span>
-        <span class="topbar-user">
-            <?= htmlspecialchars($user['name']) ?> (<?= htmlspecialchars($user['role']) ?>)
-            &middot; <a href="<?= ehs_url('admin/index.php') ?>">Dashboard</a>
-            &middot; <a href="<?= ehs_url('admin/schedule.php') ?>">Master Schedule</a>
-            &middot; <a href="<?= ehs_url('logout.php') ?>">Log out</a>
-        </span>
-    </header>
-
+            <?php $activePage = 'day_schedule'; require __DIR__ . '/../includes/sidebar_nav.php'; ?>
     <div class="back-nav">
         <button onclick="history.back()" class="btn btn-ghost-light btn-small back-btn">&larr; Back</button>
     </div>
 
-    <main class="page">
+        <main class="app-main page">
         <h1>My Day Schedule</h1>
         <p class="field-hint">
             Personal tasks and meetings — separate from formal audits. Only visible to you.
@@ -69,6 +57,7 @@ $user = ehs_require_role(['super_admin', 'admin']);
             <button id="add-item-btn" class="btn btn-primary btn-small" style="margin-top:12px;">+ Add item</button>
         </div>
     </main>
+    </div>
 
     <div id="toast" class="toast hidden"></div>
 

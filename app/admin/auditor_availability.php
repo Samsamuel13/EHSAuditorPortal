@@ -17,24 +17,12 @@ $user = ehs_require_role(['super_admin']);
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.21/index.global.min.js"></script>
 </head>
 <body>
-    <header class="topbar">
-        <span class="topbar-brand">
-            <img src="<?= ehs_url('assets/img/logo.png') ?>" alt="EHS Universal" class="topbar-logo">
-            <span class="topbar-subtitle">Auditor Scheduler</span>
-        </span>
-        <span class="topbar-user">
-            <?= htmlspecialchars($user['name']) ?> (super admin)
-            &middot; <a href="<?= ehs_url('admin/index.php') ?>">Dashboard</a>
-            &middot; <a href="<?= ehs_url('admin/auditors.php') ?>">Auditors</a>
-            &middot; <a href="<?= ehs_url('logout.php') ?>">Log out</a>
-        </span>
-    </header>
-
+            <?php $activePage = 'auditor_availability'; require __DIR__ . '/../includes/sidebar_nav.php'; ?>
     <div class="back-nav">
         <button onclick="history.back()" class="btn btn-ghost-light btn-small back-btn">&larr; Back</button>
     </div>
 
-    <main class="page">
+        <main class="app-main page">
         <h1>Update Auditor Availability</h1>
         <p class="field-hint">
             Super admin override — use this when an auditor can't update their own
@@ -65,6 +53,7 @@ $user = ehs_require_role(['super_admin']);
         </div>
         <div id="no-selection-note" class="mgmt-empty">Select an auditor above to view or edit their calendar.</div>
     </main>
+    </div>
 
     <!-- Selection toolbar -->
     <div id="selection-bar" class="selection-bar hidden">

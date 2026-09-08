@@ -17,30 +17,12 @@ $user = ehs_require_role(['super_admin', 'admin']);
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.21/index.global.min.js"></script>
 </head>
 <body>
-    <header class="topbar">
-        <span class="topbar-brand">
-            <img src="<?= ehs_url('assets/img/logo.png') ?>" alt="EHS Universal" class="topbar-logo">
-            <span class="topbar-subtitle">Auditor Scheduler</span>
-        </span>
-        <span class="topbar-user">
-            <?= htmlspecialchars($user['name']) ?> (<?= htmlspecialchars($user['role']) ?>)
-            &middot; <a href="<?= ehs_url('admin/index.php') ?>">Dashboard</a>
-            &middot; <a href="<?= ehs_url('admin/day_schedule.php') ?>">My Day Schedule</a>
-            &middot; <a href="<?= ehs_url('admin/auditors.php') ?>">Auditors</a>
-            &middot; <a href="<?= ehs_url('admin/clients.php') ?>">Clients</a>
-            &middot; <a href="<?= ehs_url('admin/schemes.php') ?>">Schemes</a>
-            &middot; <a href="<?= ehs_url('admin/holidays.php') ?>">Holidays</a>
-            &middot; <a href="<?= ehs_url('admin/export.php') ?>">Export</a>
-            &middot; <a href="<?= ehs_url('admin/profile.php') ?>">My Account</a>
-            &middot; <a href="<?= ehs_url('logout.php') ?>">Log out</a>
-        </span>
-    </header>
-
+            <?php $activePage = 'schedule'; require __DIR__ . '/../includes/sidebar_nav.php'; ?>
     <div class="back-nav">
         <button onclick="history.back()" class="btn btn-ghost-light btn-small back-btn">&larr; Back</button>
     </div>
 
-    <main class="page page-wide">
+        <main class="app-main page page-wide">
         <h1>Master Schedule</h1>
 
         <div class="toolbar">
@@ -97,6 +79,7 @@ $user = ehs_require_role(['super_admin', 'admin']);
             </div>
         </div>
     </main>
+    </div>
 
     <!-- Assignment modal -->
     <div id="modal-backdrop" class="modal-backdrop hidden">

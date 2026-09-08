@@ -2,8 +2,13 @@
 document.addEventListener('DOMContentLoaded', function () {
     const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
     const API_BASE = window.EHS_BASE_URL + '/client-management/api';
+    const PAGE_SIZE = 15;
 
     let activeCertIdForModal = null;
+    let allDueItems = [];       // full due-today list, fetched once per filter/reload
+    let activeStage = null;     // which stage card is currently open (1-4), or null = list section hidden
+    let currentPage = 1;
+    let searchTerm = '';
 
     const toastEl = document.getElementById('toast');
     let toastTimer = null;
@@ -25,7 +30,6 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     const STAGE_LABELS = { 1: 'Stage 1 (4 months)', 2: 'Stage 2 (2 months)', 3: 'Stage 3 (30 days)', 4: 'Stage 4 (4 days)' };
-    const STAGE_COLORS = { 1: '#2563eb', 2: '#7c3aed', 3: '#b45309', 4: '#b91c1c' };
     const MILESTONE_LABELS = { surveillance_1: 'Surveillance 1', surveillance_2: 'Surveillance 2', recertification: 'Recertification' };
 
     // Reuses the SAME filter inputs the certifications table below already
@@ -40,41 +44,106 @@ document.addEventListener('DOMContentLoaded', function () {
         };
     }
 
-    function stageBadge(stage, overdue, daysUntil) {
-        const color = STAGE_COLORS[stage] || '#6b7280';
-        const dueText = overdue ? `${Math.abs(daysUntil)}d overdue` : `in ${daysUntil}d`;
-        return `<span class="badge" style="background:${color}22; color:${color}; border:1px solid ${color}55;">${STAGE_LABELS[stage] || 'Stage ' + stage}</span>
-                <span style="margin-left:6px; font-size:0.78rem; color:${overdue ? '#b91c1c' : '#6b7280'};">${dueText}</span>`;
-    }
-
     function loadFollowupsToday() {
         const params = new URLSearchParams(currentFilters());
         fetch(API_BASE + '/renewal_followups.php?' + params.toString())
             .then(r => r.json())
-            .then(data => renderFollowupsToday(data.today || []))
+            .then(data => {
+                allDueItems = data.today || [];
+                renderStageCounts();
+                if (activeStage) renderFollowupList(); // keep whatever's open in sync after a filter change/reload
+            })
             .catch(() => showToast('Could not load today\'s follow-ups.', true));
     }
 
-    function renderFollowupsToday(items) {
-        document.getElementById('followup-today-count').textContent = items.length;
+    function renderStageCounts() {
+        const counts = { 1: 0, 2: 0, 3: 0, 4: 0 };
+        allDueItems.forEach(item => { counts[item.stage] = (counts[item.stage] || 0) + 1; });
+        document.getElementById('followup-today-count').textContent = allDueItems.length;
+        [1, 2, 3, 4].forEach(s => { document.getElementById('stage-count-' + s).textContent = counts[s]; });
+    }
+
+    // --- Stage card click -> open the filtered, paginated list for that stage ---
+    document.querySelectorAll('.followup-stage-card').forEach(card => {
+        card.addEventListener('click', function () {
+            const stage = parseInt(this.dataset.stage, 10);
+            activeStage = (activeStage === stage) ? null : stage; // click again to close
+            currentPage = 1;
+            document.getElementById('followup-list-section').classList.toggle('hidden', activeStage === null);
+            document.querySelectorAll('.followup-stage-card').forEach(c => c.style.outline = '');
+            if (activeStage !== null) {
+                this.style.outline = '2px solid var(--brand, #283891)';
+                renderFollowupList();
+            }
+        });
+    });
+    document.getElementById('followup-list-close').addEventListener('click', function () {
+        activeStage = null;
+        document.getElementById('followup-list-section').classList.add('hidden');
+        document.querySelectorAll('.followup-stage-card').forEach(c => c.style.outline = '');
+    });
+
+    let searchDebounce;
+    document.getElementById('followup-search').addEventListener('input', function () {
+        clearTimeout(searchDebounce);
+        searchDebounce = setTimeout(() => {
+            searchTerm = this.value.trim().toLowerCase();
+            currentPage = 1;
+            renderFollowupList();
+        }, 250);
+    });
+
+    function renderFollowupList() {
+        document.getElementById('followup-list-title').textContent = STAGE_LABELS[activeStage] || ('Stage ' + activeStage);
+
+        let items = allDueItems.filter(i => i.stage === activeStage);
+        if (searchTerm) {
+            items = items.filter(i => i.company_name.toLowerCase().includes(searchTerm));
+        }
+        // Most overdue first within the stage.
+        items.sort((a, b) => a.days_until - b.days_until);
+
+        const totalPages = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
+        currentPage = Math.min(currentPage, totalPages);
+        const pageItems = items.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
         document.getElementById('followup-today-empty').classList.toggle('hidden', items.length > 0);
 
         const body = document.getElementById('followup-today-body');
-        body.innerHTML = items.map(item => `
+        body.innerHTML = pageItems.map(item => {
+            const dueText = item.overdue ? `${Math.abs(item.days_until)}d overdue` : `in ${item.days_until}d`;
+            return `
             <tr>
                 <td><a href="${window.EHS_BASE_URL}/client-management/client_detail.php?id=${item.client_id}">${escapeHtml(item.company_name)}</a></td>
                 <td>${escapeHtml(item.entity || 'EHS')}</td>
-                <td>${escapeHtml(item.scheme_name)} — ${escapeHtml(MILESTONE_LABELS[item.milestone_key] || item.milestone_label)}<br><span style="font-size:0.78rem; color:#6b7280;">${escapeHtml(item.milestone_date)}</span></td>
-                <td>${stageBadge(item.stage, item.overdue, item.days_until)}</td>
-                <td>${escapeHtml(item.milestone_date)}</td>
+                <td>${escapeHtml(item.scheme_name)} — ${escapeHtml(MILESTONE_LABELS[item.milestone_key] || item.milestone_label)}</td>
+                <td>${escapeHtml(item.milestone_date)} <span style="color:${item.overdue ? '#b91c1c' : '#6b7280'}; font-size:0.78rem;">(${dueText})</span></td>
                 <td>${escapeHtml(item.responsible_person || '—')}</td>
                 <td>
                     <button class="btn btn-primary btn-small" style="width:auto;" onclick="cmOpenStageFollowupModal(${item.cert_id}, '${escapeHtml(item.company_name).replace(/'/g, "\\'")}')">Mark Followed Up</button>
                     <button class="btn btn-ghost-light btn-small" style="width:auto; margin-left:4px;" onclick="cmOpenFollowupHistory(${item.cert_id}, '${escapeHtml(item.company_name).replace(/'/g, "\\'")}')">History</button>
                 </td>
-            </tr>
-        `).join('');
+            </tr>`;
+        }).join('');
+
+        renderPaginationControls('followup-pagination', currentPage, totalPages, (p) => { currentPage = p; renderFollowupList(); });
     }
+
+    /** Shared, minimal pagination control renderer — Prev / page X of Y / Next. */
+    function renderPaginationControls(containerId, page, totalPages, onChange) {
+        const el = document.getElementById(containerId);
+        if (totalPages <= 1) { el.innerHTML = ''; return; }
+        el.innerHTML = `
+            <button class="btn btn-ghost-light btn-small" style="width:auto;" ${page <= 1 ? 'disabled' : ''} id="${containerId}-prev">‹ Prev</button>
+            <span>Page ${page} of ${totalPages}</span>
+            <button class="btn btn-ghost-light btn-small" style="width:auto;" ${page >= totalPages ? 'disabled' : ''} id="${containerId}-next">Next ›</button>
+        `;
+        const prevBtn = document.getElementById(containerId + '-prev');
+        const nextBtn = document.getElementById(containerId + '-next');
+        if (prevBtn) prevBtn.addEventListener('click', () => onChange(page - 1));
+        if (nextBtn) nextBtn.addEventListener('click', () => onChange(page + 1));
+    }
+    window.cmRenderPaginationControls = renderPaginationControls; // shared with cm_renewal_dashboard.js
 
     // --- Mark followed-up modal ---
     const stageModal = document.getElementById('stage-followup-modal-overlay');

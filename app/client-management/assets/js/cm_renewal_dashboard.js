@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', function () {
     let thresholds = [30, 60, 90];
     let activeNotesClientId = null;
     let activeNotesCertId = null;
+    let currentPage = 1;
 
     const ACTIVITY_TYPE_LABELS = {
         whatsapp_sent: '💬 WhatsApp Sent', call: '📞 Call', email: '✉️ Email',
@@ -82,14 +83,32 @@ document.addEventListener('DOMContentLoaded', function () {
     function load() {
         const params = new URLSearchParams(currentFilters());
         if (activeBucket) params.set('bucket', activeBucket);
+        params.set('page', currentPage);
+        params.set('per_page', 25);
 
         fetch(API_BASE + '/renewal_dashboard.php?' + params.toString())
             .then(r => r.json())
             .then(data => {
                 thresholds = data.thresholds || thresholds;
                 render(data);
+                renderResultsPagination(data.pagination);
             })
             .catch(() => showToast('Could not load the renewal dashboard.', true));
+    }
+
+    /** Small, self-contained pagination control — Prev / page X of Y / Next. Deliberately not shared as a cross-file global, since script load order between this file and cm_renewal_followups.js isn't guaranteed at call time. */
+    function renderResultsPagination(pagination) {
+        const el = document.getElementById('results-pagination');
+        if (!pagination || pagination.total_pages <= 1) { el.innerHTML = ''; return; }
+        el.innerHTML = `
+            <button class="btn btn-ghost-light btn-small" style="width:auto;" ${pagination.page <= 1 ? 'disabled' : ''} id="results-page-prev">‹ Prev</button>
+            <span>Page ${pagination.page} of ${pagination.total_pages} (${pagination.total_count} total)</span>
+            <button class="btn btn-ghost-light btn-small" style="width:auto;" ${pagination.page >= pagination.total_pages ? 'disabled' : ''} id="results-page-next">Next ›</button>
+        `;
+        const prevBtn = document.getElementById('results-page-prev');
+        const nextBtn = document.getElementById('results-page-next');
+        if (prevBtn) prevBtn.addEventListener('click', () => { currentPage = pagination.page - 1; load(); });
+        if (nextBtn) nextBtn.addEventListener('click', () => { currentPage = pagination.page + 1; load(); });
     }
 
     function render(data) {
@@ -167,9 +186,9 @@ document.addEventListener('DOMContentLoaded', function () {
         body.innerHTML = html;
     }
 
-    document.getElementById('widget-near').addEventListener('click', () => { activeBucket = activeBucket === 'near' ? '' : 'near'; load(); });
-    document.getElementById('widget-far').addEventListener('click', () => { activeBucket = activeBucket === 'far' ? '' : 'far'; load(); });
-    document.getElementById('widget-overdue').addEventListener('click', () => { activeBucket = activeBucket === 'overdue' ? '' : 'overdue'; load(); });
+    document.getElementById('widget-near').addEventListener('click', () => { activeBucket = activeBucket === 'near' ? '' : 'near'; currentPage = 1; load(); });
+    document.getElementById('widget-far').addEventListener('click', () => { activeBucket = activeBucket === 'far' ? '' : 'far'; currentPage = 1; load(); });
+    document.getElementById('widget-overdue').addEventListener('click', () => { activeBucket = activeBucket === 'overdue' ? '' : 'overdue'; currentPage = 1; load(); });
 
     function debounce(fn, ms) {
         let t;
@@ -177,7 +196,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     ['filter-client-name', 'filter-scheme-category', 'filter-industry', 'filter-entity', 'filter-responsible'].forEach(id => {
         const el = document.getElementById(id);
-        el.addEventListener(el.tagName === 'SELECT' ? 'change' : 'input', debounce(load, 300));
+        el.addEventListener(el.tagName === 'SELECT' ? 'change' : 'input', debounce(() => { currentPage = 1; load(); }, 300));
     });
     document.getElementById('filter-clear').addEventListener('click', () => {
         document.getElementById('filter-client-name').value = '';
@@ -186,6 +205,7 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('filter-entity').value = '';
         document.getElementById('filter-responsible').value = '';
         activeBucket = '';
+        currentPage = 1;
         load();
     });
 

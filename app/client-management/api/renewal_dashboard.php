@@ -149,7 +149,21 @@ if ($method === 'GET') {
         $dateCmp = strcmp($a['next_due']['date'] ?? '9999-99-99', $b2['next_due']['date'] ?? '9999-99-99');
         return $dateCmp !== 0 ? $dateCmp : ($a['client_id'] <=> $b2['client_id']);
     });
-    $selected = array_slice($selected, 0, 500);
+
+    // Pagination — applied AFTER filtering/bucketing/sorting, since which
+    // bucket a cert falls into depends on per-row date math done in PHP,
+    // not something a plain SQL LIMIT could do earlier in this flow.
+    // Keep the FULL filtered set as $selectedAll for the stats below (the
+    // Followed Up / Pending Follow-up cards are documented as reflecting
+    // everything the current filters match, not just one page of it) —
+    // only the paginated $selected slice goes into the certifications list.
+    $selectedAll = $selected;
+    $totalCount = count($selected);
+    $page = max(1, (int) ($_GET['page'] ?? 1));
+    $perPage = min(100, max(10, (int) ($_GET['per_page'] ?? 25)));
+    $totalPages = max(1, (int) ceil($totalCount / $perPage));
+    $page = min($page, $totalPages);
+    $selected = array_slice($selected, ($page - 1) * $perPage, $perPage);
 
     // --- Stats cards ---
     // Milestone-done counts read from the ACTIVITY LOG
@@ -231,14 +245,16 @@ if ($method === 'GET') {
     $activityLoggedThisMonth = (int) $activityStmt->fetchColumn();
 
     // Follow-up pending/done — Option A: derived from the activity log,
-    // no new scheduling table. Scoped to exactly what's shown in the table
-    // below ($selected — respects the bucket filter too, unlike the
-    // milestone-done stats above), since "are the certs I'm currently
-    // looking at being followed up" is genuinely bucket-relevant.
+    // no new scheduling table. Scoped to the FULL filtered set
+    // ($selectedAll — respects the bucket filter too, unlike the
+    // milestone-done stats above, but reflects everything the filters
+    // match, not just the current page), since "are the certs I'm
+    // currently looking at being followed up" is genuinely bucket-relevant
+    // but shouldn't silently change every time someone flips a page.
     // "Followed up" = a Log Activity entry on that certification within
     // the last $followupRecencyDays days. "Pending" = none.
     $followupRecencyDays = 14;
-    $certIdsInView = array_column($selected, 'id');
+    $certIdsInView = array_column($selectedAll, 'id');
     $recentActivityCertIds = [];
     if ($certIdsInView) {
         $inPlaceholders = implode(',', array_fill(0, count($certIdsInView), '?'));
@@ -252,7 +268,7 @@ if ($method === 'GET') {
     $recentActivitySet = array_flip($recentActivityCertIds);
     $followedUpCount = 0;
     $pendingFollowupCount = 0;
-    foreach ($selected as $cert) {
+    foreach ($selectedAll as $cert) {
         if (isset($recentActivitySet[$cert['id']])) {
             $followedUpCount++;
         } else {
@@ -264,6 +280,7 @@ if ($method === 'GET') {
         'thresholds' => [$t1, $t2, $t3],
         'counts' => $counts,
         'certifications' => $selected,
+        'pagination' => ['page' => $page, 'per_page' => $perPage, 'total_count' => $totalCount, 'total_pages' => $totalPages],
         'stats' => [
             'milestones_done_this_month' => $milestonesDone,
             'activity_logged_this_month' => $activityLoggedThisMonth,

@@ -45,29 +45,12 @@ $activity = $logStmt->fetchAll();
 <link rel="stylesheet" href="<?= ehs_url('client-management/assets/css/cm.css') ?>">
 </head>
 <body>
-    <header class="topbar">
-        <span class="topbar-brand">
-            <img src="<?= ehs_url('assets/img/logo.png') ?>" alt="EHS Universal" class="topbar-logo">
-            <span class="topbar-subtitle">Client Management</span>
-        </span>
-        <span class="topbar-user">
-            <?= htmlspecialchars($user['name']) ?>
-            &middot; <a href="<?= ehs_url('client-management/index.php') ?>">Client Directory</a>
-            &middot; <a href="<?= ehs_url('client-management/renewal_dashboard.php') ?>">Renewal Dashboard</a>
-            &middot; <a href="<?= ehs_url('client-management/audit_extract.php') ?>">Audit Extract</a>
-            &middot; <a href="<?= ehs_url('client-management/import.php') ?>">Bulk Import</a>
-            &middot; <a href="<?= ehs_url('crm/index.php') ?>">CRM</a>
-            &middot; <a href="<?= ehs_url('admin/index.php') ?>">Scheduler Dashboard</a>
-            &middot; <a href="<?= ehs_url('logout.php') ?>">Log out</a>
-        </span>
-    </header>
+            <?php $activePage = 'cm_client_detail'; require __DIR__ . '/../includes/sidebar_nav.php'; ?>
+    <main class="app-main page">
+        <div class="back-nav">
+            <button onclick="location.href='<?= ehs_url('client-management/index.php') ?>'" class="btn btn-ghost-light btn-small back-btn">&larr; Back to directory</button>
+        </div>
 
-    <div class="back-nav">
-        <button onclick="location.href='<?= ehs_url('client-management/index.php') ?>'" class="btn btn-ghost-light btn-small back-btn">&larr; Back to directory</button>
-    </div>
-
-    <main class="page">
-        <h1><?= htmlspecialchars($client['company_name']) ?>
             <span class="badge cm-badge-<?= htmlspecialchars($client['status']) ?>" style="vertical-align:middle; margin-left:8px;">
                 <?= htmlspecialchars(ucfirst($client['status'])) ?>
             </span>
@@ -140,6 +123,7 @@ $activity = $logStmt->fetchAll();
             <?php endif; ?>
         </div>
     </main>
+    </div>
 
     <div id="modal-backdrop" class="modal-backdrop hidden">
         <div class="modal modal-wide">

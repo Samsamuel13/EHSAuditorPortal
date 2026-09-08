@@ -16,25 +16,12 @@ $user = ehs_require_role(['super_admin', 'admin', 'auditor']);
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.21/index.global.min.js"></script>
 </head>
 <body>
-    <header class="topbar" style="background: <?= htmlspecialchars($user['color_hex']) ?>;">
-        <span class="topbar-brand">
-            <img src="<?= ehs_url('assets/img/logo.png') ?>" alt="EHS Universal" class="topbar-logo">
-            <span class="topbar-subtitle">Auditor Scheduler</span>
-        </span>
-        <span class="topbar-user">
-            <?= htmlspecialchars($user['name']) ?>
-            &middot; <a href="<?= ehs_url('auditor/index.php') ?>">Dashboard</a>
-            &middot; <a href="<?= ehs_url('auditor/day_schedule.php') ?>">My Day Schedule</a>
-            &middot; <a href="<?= ehs_url('auditor/profile.php') ?>">My Account</a>
-            &middot; <a href="<?= ehs_url('logout.php') ?>">Log out</a>
-        </span>
-    </header>
-
+            <?php $activePage = 'availability'; require __DIR__ . '/../includes/sidebar_nav.php'; ?>
     <div class="back-nav">
         <button onclick="history.back()" class="btn btn-ghost-light btn-small back-btn">&larr; Back</button>
     </div>
 
-    <main class="page">
+        <main class="app-main page">
         <h1>My Availability</h1>
         <p class="page-hint">
             Click a date to select it, <kbd>Ctrl</kbd>/<kbd>Cmd</kbd>+click to add more dates,
@@ -51,6 +38,7 @@ $user = ehs_require_role(['super_admin', 'admin', 'auditor']);
 
         <div id="calendar"></div>
     </main>
+    </div>
 
     <!-- Selection toolbar -->
     <div id="selection-bar" class="selection-bar hidden">

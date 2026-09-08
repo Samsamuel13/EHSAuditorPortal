@@ -16,21 +16,8 @@ $user = ehs_require_role(['auditor']);
 <link rel="stylesheet" href="<?= ehs_url('assets/css/dashboard.css') ?>">
 </head>
 <body>
-    <header class="topbar" style="background: <?= htmlspecialchars($user['color_hex']) ?>;">
-        <span class="topbar-brand">
-            <img src="<?= ehs_url('assets/img/logo.png') ?>" alt="EHS Universal" class="topbar-logo">
-            <span class="topbar-subtitle">Auditor Scheduler</span>
-        </span>
-        <span class="topbar-user">
-            <?= htmlspecialchars($user['name']) ?>
-            &middot; <a href="<?= ehs_url('auditor/availability.php') ?>">My Availability</a>
-            &middot; <a href="<?= ehs_url('auditor/day_schedule.php') ?>">My Day Schedule</a>
-            &middot; <a href="<?= ehs_url('auditor/profile.php') ?>">My Account</a>
-            &middot; <a href="<?= ehs_url('logout.php') ?>">Log out</a>
-        </span>
-    </header>
-
-    <main class="page">
+            <?php $activePage = 'schedule'; require __DIR__ . '/../includes/sidebar_nav.php'; ?>
+        <main class="app-main page">
         <h1>My Dashboard</h1>
         <p>Welcome, <strong><?= htmlspecialchars($user['name']) ?></strong>.</p>
         <p><a href="<?= ehs_url('auditor/availability.php') ?>" class="btn btn-primary" style="width:auto; display:inline-block;">Update my availability →</a></p>
@@ -47,6 +34,7 @@ $user = ehs_require_role(['auditor']);
             </div>
         </div>
     </main>
+    </div>
 
     <div id="toast" class="toast hidden"></div>
 

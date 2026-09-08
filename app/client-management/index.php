@@ -18,23 +18,8 @@ $user = ehs_require_role(['super_admin', 'admin']);
 <link rel="stylesheet" href="<?= ehs_url('client-management/assets/css/cm.css') ?>">
 </head>
 <body>
-    <header class="topbar">
-        <span class="topbar-brand">
-            <img src="<?= ehs_url('assets/img/logo.png') ?>" alt="EHS Universal" class="topbar-logo">
-            <span class="topbar-subtitle">Client Management</span>
-        </span>
-        <span class="topbar-user">
-            <?= htmlspecialchars($user['name']) ?>
-            &middot; <a href="<?= ehs_url('client-management/renewal_dashboard.php') ?>">Renewal Dashboard</a>
-            &middot; <a href="<?= ehs_url('client-management/audit_extract.php') ?>">Audit Extract</a>
-            &middot; <a href="<?= ehs_url('client-management/import.php') ?>">Bulk Import</a>
-            &middot; <a href="<?= ehs_url('crm/index.php') ?>">CRM</a>
-            &middot; <a href="<?= ehs_url('admin/index.php') ?>">Scheduler Dashboard</a>
-            &middot; <a href="<?= ehs_url('logout.php') ?>">Log out</a>
-        </span>
-    </header>
-
-    <main class="page">
+            <?php $activePage = 'cm_index'; require __DIR__ . '/../includes/sidebar_nav.php'; ?>
+    <main class="app-main page">
         <h1>Client Directory</h1>
 
         <div class="filter-bar">
@@ -91,6 +76,7 @@ $user = ehs_require_role(['super_admin', 'admin']);
 
         <div class="pagination-bar" id="pagination-bar"></div>
     </main>
+    </div>
 
     <div id="modal-backdrop" class="modal-backdrop hidden">
         <div class="modal modal-wide">

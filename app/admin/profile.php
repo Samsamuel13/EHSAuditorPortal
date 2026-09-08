@@ -16,24 +16,12 @@ $user = ehs_require_role(['super_admin', 'admin']);
 <link rel="stylesheet" href="<?= ehs_url('assets/css/management.css') ?>">
 </head>
 <body>
-    <header class="topbar">
-        <span class="topbar-brand">
-            <img src="<?= ehs_url('assets/img/logo.png') ?>" alt="EHS Universal" class="topbar-logo">
-            <span class="topbar-subtitle">Auditor Scheduler</span>
-        </span>
-        <span class="topbar-user">
-            <?= htmlspecialchars($user['name']) ?> (<?= htmlspecialchars($user['role']) ?>)
-            &middot; <a href="<?= ehs_url('admin/index.php') ?>">Dashboard</a>
-            &middot; <a href="<?= ehs_url('admin/schedule.php') ?>">Master Schedule</a>
-            &middot; <a href="<?= ehs_url('logout.php') ?>">Log out</a>
-        </span>
-    </header>
-
+            <?php $activePage = 'profile'; require __DIR__ . '/../includes/sidebar_nav.php'; ?>
     <div class="back-nav">
         <button onclick="history.back()" class="btn btn-ghost-light btn-small back-btn">&larr; Back</button>
     </div>
 
-    <main class="page">
+        <main class="app-main page">
         <h1>My Account</h1>
 
         <div class="mgmt-table-wrap" style="padding: 24px; max-width: 420px;">
@@ -64,6 +52,7 @@ $user = ehs_require_role(['super_admin', 'admin']);
             <button id="save-btn" class="btn btn-primary" style="margin-top:20px;">Update password</button>
         </div>
     </main>
+    </div>
 
     <div id="toast" class="toast hidden"></div>
 

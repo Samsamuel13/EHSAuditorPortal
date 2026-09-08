@@ -65,26 +65,21 @@ $isSuperAdmin = $user['role'] === 'super_admin';
        they read as one block instead of unrelated rows. */
     .cm-group-cell { vertical-align: middle; }
     .cm-grouped-row td { border-top: 1px dashed #e5e7eb; }
+
+    /* Contains the main certifications table's scroll to its own box
+       instead of letting it stretch the whole page — with pagination at
+       25/page this rarely needs to scroll internally at all, but caps it
+       either way so the page height stays predictable. */
+    .cm-scroll-table-wrap { max-height: 560px; overflow-y: auto; }
+    .cm-scroll-table-wrap table thead th {
+        position: sticky; top: 0; z-index: 1;
+        background: #f8f9fc; /* opaque so rows don't show through while scrolling */
+    }
 </style>
 </head>
 <body>
-    <header class="topbar">
-        <span class="topbar-brand">
-            <img src="<?= ehs_url('assets/img/logo.png') ?>" alt="EHS Universal" class="topbar-logo">
-            <span class="topbar-subtitle">Client Management</span>
-        </span>
-        <span class="topbar-user">
-            <?= htmlspecialchars($user['name']) ?>
-            &middot; <a href="<?= ehs_url('client-management/index.php') ?>">Client Directory</a>
-            &middot; <a href="<?= ehs_url('client-management/audit_extract.php') ?>">Audit Extract</a>
-            &middot; <a href="<?= ehs_url('client-management/import.php') ?>">Bulk Import</a>
-            &middot; <a href="<?= ehs_url('crm/index.php') ?>">CRM</a>
-            &middot; <a href="<?= ehs_url('admin/index.php') ?>">Scheduler Dashboard</a>
-            &middot; <a href="<?= ehs_url('logout.php') ?>">Log out</a>
-        </span>
-    </header>
-
-    <main class="page">
+            <?php $activePage = 'renewal_dashboard'; require __DIR__ . '/../includes/sidebar_nav.php'; ?>
+    <main class="app-main page">
         <h1>Renewal Dashboard</h1>
 
         <div class="filter-bar">
@@ -175,26 +170,55 @@ $isSuperAdmin = $user['role'] === 'super_admin';
             <span id="followup-today-count" class="badge" style="background:#fee2e2; color:#b91c1c;">—</span>
         </h2>
         <p style="color:var(--muted, #6b7280); margin-top:-8px; font-size:0.85rem;">
-            Companies that have crossed a follow-up stage (4 months / 2 months / 30 days / 4 days before their next Surveillance or Recertification) and haven't been actioned for that stage yet.
+            Click a stage below to see who's due for it. Nothing shows until you pick one — with a large list, that's easier to work through than one long combined table.
         </p>
-        <div class="mgmt-table-wrap">
-            <table class="mgmt-table">
-                <thead><tr>
-                    <th>Client</th>
-                    <th>Entity</th>
-                    <th>Milestone</th>
-                    <th>Stage</th>
-                    <th>Due</th>
-                    <th>Responsible</th>
-                    <th></th>
-                </tr></thead>
-                <tbody id="followup-today-body"></tbody>
-            </table>
-            <div id="followup-today-empty" class="mgmt-empty hidden">Nothing due for follow-up right now.</div>
+
+        <div class="dash-grid" style="grid-template-columns: repeat(4, 1fr);">
+            <div class="dash-card followup-stage-card" data-stage="4" style="cursor:pointer; border-left:4px solid #b91c1c;">
+                <h3>Stage 4 <span style="font-weight:400; font-size:0.75rem;">(4 days)</span></h3>
+                <div class="stat-row"><span class="stat-number" id="stage-count-4">—</span><span class="stat-label">due</span></div>
+            </div>
+            <div class="dash-card followup-stage-card" data-stage="3" style="cursor:pointer; border-left:4px solid #b45309;">
+                <h3>Stage 3 <span style="font-weight:400; font-size:0.75rem;">(30 days)</span></h3>
+                <div class="stat-row"><span class="stat-number" id="stage-count-3">—</span><span class="stat-label">due</span></div>
+            </div>
+            <div class="dash-card followup-stage-card" data-stage="2" style="cursor:pointer; border-left:4px solid #7c3aed;">
+                <h3>Stage 2 <span style="font-weight:400; font-size:0.75rem;">(2 months)</span></h3>
+                <div class="stat-row"><span class="stat-number" id="stage-count-2">—</span><span class="stat-label">due</span></div>
+            </div>
+            <div class="dash-card followup-stage-card" data-stage="1" style="cursor:pointer; border-left:4px solid #2563eb;">
+                <h3>Stage 1 <span style="font-weight:400; font-size:0.75rem;">(4 months)</span></h3>
+                <div class="stat-row"><span class="stat-number" id="stage-count-1">—</span><span class="stat-label">due</span></div>
+            </div>
+        </div>
+
+        <div id="followup-list-section" class="hidden" style="margin-top:14px;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <h3 style="font-size:0.95rem; margin:0;" id="followup-list-title">Stage —</h3>
+                <div>
+                    <input type="text" id="followup-search" placeholder="Search company..." style="font-size:0.85rem; padding:4px 8px;">
+                    <button id="followup-list-close" class="btn btn-ghost-light btn-small" style="width:auto; margin-left:6px;">Close</button>
+                </div>
+            </div>
+            <div class="mgmt-table-wrap" style="margin-top:8px;">
+                <table class="mgmt-table">
+                    <thead><tr>
+                        <th>Client</th>
+                        <th>Entity</th>
+                        <th>Milestone</th>
+                        <th>Due</th>
+                        <th>Responsible</th>
+                        <th></th>
+                    </tr></thead>
+                    <tbody id="followup-today-body"></tbody>
+                </table>
+                <div id="followup-today-empty" class="mgmt-empty hidden">Nothing due for this stage right now.</div>
+            </div>
+            <div id="followup-pagination" style="display:flex; justify-content:center; align-items:center; gap:10px; margin-top:10px; font-size:0.85rem;"></div>
         </div>
 
         <h2 style="font-size:1.05rem; margin-top:24px;" id="list-title">All certifications with an expiry date</h2>
-        <div class="mgmt-table-wrap">
+        <div class="mgmt-table-wrap cm-scroll-table-wrap">
             <table class="mgmt-table">
                 <thead><tr>
                     <th>Client</th>
@@ -211,7 +235,9 @@ $isSuperAdmin = $user['role'] === 'super_admin';
             </table>
             <div id="results-empty-state" class="mgmt-empty hidden">No certifications match these filters.</div>
         </div>
+        <div id="results-pagination" style="display:flex; justify-content:center; align-items:center; gap:10px; margin-top:10px; font-size:0.85rem;"></div>
     </main>
+    </div>
 
     <!-- Mark stage follow-up modal -->
     <div id="stage-followup-modal-overlay" class="cm-modal-overlay hidden">

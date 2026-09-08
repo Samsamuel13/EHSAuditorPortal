@@ -18,24 +18,8 @@ $user = ehs_require_role(['super_admin', 'admin']);
 <link rel="stylesheet" href="<?= ehs_url('client-management/assets/css/cm.css') ?>">
 </head>
 <body>
-    <header class="topbar">
-        <span class="topbar-brand">
-            <img src="<?= ehs_url('assets/img/logo.png') ?>" alt="EHS Universal" class="topbar-logo">
-            <span class="topbar-subtitle">Client Management</span>
-        </span>
-        <span class="topbar-user">
-            <?= htmlspecialchars($user['name']) ?>
-            &middot; <a href="<?= ehs_url('client-management/index.php') ?>">Client Directory</a>
-            &middot; <a href="<?= ehs_url('client-management/renewal_dashboard.php') ?>">Renewal Dashboard</a>
-            &middot; <a href="<?= ehs_url('client-management/audit_extract.php') ?>">Audit Extract</a>
-            &middot; <a href="<?= ehs_url('client-management/import.php') ?>">Bulk Import</a>
-            &middot; <a href="<?= ehs_url('crm/index.php') ?>">CRM</a>
-            &middot; <a href="<?= ehs_url('admin/index.php') ?>">Scheduler Dashboard</a>
-            &middot; <a href="<?= ehs_url('logout.php') ?>">Log out</a>
-        </span>
-    </header>
-
-    <main class="page">
+            <?php $activePage = 'audit_extract'; require __DIR__ . '/../includes/sidebar_nav.php'; ?>
+    <main class="app-main page">
         <h1>Audit Extract</h1>
         <p style="color:var(--muted); margin-top:-8px;">
             Clients requiring an audit (1st Certification, Surveillance 1/2, or Recertification)
@@ -98,6 +82,7 @@ $user = ehs_require_role(['super_admin', 'admin']);
             <div id="results-empty-state" class="mgmt-empty hidden">No certifications need an audit in this window.</div>
         </div>
     </main>
+    </div>
 
     <div id="toast" class="toast hidden"></div>
     <script>window.EHS_BASE_URL = "<?= addslashes(ehs_url()) ?>";</script>

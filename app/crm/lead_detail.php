@@ -18,20 +18,8 @@ if ($leadId <= 0) { http_response_code(422); die('A valid lead id is required.')
 <link rel="stylesheet" href="<?= ehs_url('crm/assets/css/crm.css') ?>">
 </head>
 <body class="bg-light">
-    <header class="crm-topbar">
-        <span>
-            <img src="<?= ehs_url('assets/img/logo.png') ?>" alt="EHS Universal" class="crm-topbar-logo">
-            <strong>CRM — Lead Pipeline</strong>
-        </span>
-        <span>
-            <?= htmlspecialchars($user['name']) ?>
-            <a href="<?= ehs_url('crm/index.php') ?>"><i class="bi bi-kanban"></i> Board</a>
-            <a href="<?= ehs_url('crm/list.php') ?>"><i class="bi bi-list-ul"></i> List</a>
-            <a href="<?= ehs_url('logout.php') ?>"><i class="bi bi-box-arrow-right"></i> Log out</a>
-        </span>
-    </header>
-
-    <main class="container-fluid py-3">
+            <?php $activePage = 'crm_lead_detail'; require __DIR__ . '/../includes/sidebar_nav.php'; ?>
+    <main class="app-main container-fluid py-3">
         <a href="<?= ehs_url('crm/list.php') ?>" class="small"><i class="bi bi-arrow-left"></i> Back to list</a>
 
         <div class="row g-3 mt-1">
@@ -107,6 +95,7 @@ if ($leadId <= 0) { http_response_code(422); die('A valid lead id is required.')
             </div>
         </div>
     </main>
+    </div>
 
     <!-- Edit lead modal -->
     <div class="modal fade" id="modal-edit-lead" tabindex="-1">
