@@ -64,6 +64,47 @@ function cm_normalize_header(string $h): string
     return strtolower(trim(preg_replace('/[\s\-]+/', '_', $h)));
 }
 
+/**
+ * Common human-friendly header text (as seen on ad-hoc export files, not
+ * generated from import_template.php) mapped to the exact machine keys
+ * CM_IMPORT_HEADERS expects. A file using "UEN" or "Scheme" instead of
+ * "uen_registration_no"/"scheme_type_name" previously failed SILENTLY —
+ * no error, just every mismatched column quietly came through as blank,
+ * because a missing column value is indistinguishable from "intentionally
+ * left blank" (a legitimate case for scheme_type_name, e.g.). That
+ * produced 264 clients with no UEN/Industry and zero certifications from
+ * a file that looked completely valid in the preview screen.
+ * This is intentionally just a lookup table, not fuzzy matching — an
+ * unrecognized header still comes through unmapped, so cm_parse_import_file
+ * callers can still see exactly what the file's raw headers were.
+ */
+const CM_IMPORT_HEADER_ALIASES = [
+    'uen' => 'uen_registration_no',
+    'industry' => 'industry_sector',
+    'designation' => 'contact_designation',
+    'contact_designation_title' => 'contact_designation',
+    'scheme' => 'scheme_type_name',
+    'certificate_#' => 'certificate_number',
+    'cert_#' => 'certificate_number',
+    'cert_no' => 'certificate_number',
+    '1st_certification' => 'issue_date',
+    '1st_cert' => 'issue_date',
+    'surveillance_1' => 'surveillance_1_date',
+    'surv_1' => 'surveillance_1_date',
+    'surveillance_2' => 'surveillance_2_date',
+    'surv_2' => 'surveillance_2_date',
+    'recertification' => 'expiry_date',
+    'recert' => 'expiry_date',
+    'responsible_person' => 'responsible_person_name',
+];
+
+/** Applies CM_IMPORT_HEADER_ALIASES on top of cm_normalize_header(). */
+function cm_normalize_header_with_aliases(string $h): string
+{
+    $normalized = cm_normalize_header($h);
+    return CM_IMPORT_HEADER_ALIASES[$normalized] ?? $normalized;
+}
+
 /** Coerce a possibly-Excel-serial-date cell value into 'YYYY-MM-DD' or null. Returns ['ok'=>bool,'value'=>?string]. */
 function cm_coerce_date_cell($value): array
 {
@@ -101,7 +142,7 @@ function cm_parse_import_file(string $tmpPath, string $originalName): array
         if (!$handle) throw new \RuntimeException('Could not read the uploaded file.');
         $header = fgetcsv($handle);
         if ($header === false) { fclose($handle); throw new \RuntimeException('The file has no header row.'); }
-        $normalizedHeader = array_map('cm_normalize_header', $header);
+        $normalizedHeader = array_map('cm_normalize_header_with_aliases', $header);
         while (($line = fgetcsv($handle)) !== false) {
             if (count(array_filter($line, fn($v) => trim((string) $v) !== '')) === 0) continue; // skip fully blank lines
             $row = [];
@@ -129,7 +170,7 @@ function cm_parse_import_file(string $tmpPath, string $originalName): array
         $data = $sheet->toArray(null, true, false, false); // formatData=false: real date cells come back as raw Excel serials, not locale-formatted display strings
         if (empty($data)) throw new \RuntimeException('The spreadsheet is empty.');
 
-        $header = array_map('cm_normalize_header', array_map('strval', $data[0]));
+        $header = array_map('cm_normalize_header_with_aliases', array_map('strval', $data[0]));
         $rows = [];
         foreach (array_slice($data, 1) as $line) {
             if (count(array_filter($line, fn($v) => trim((string) $v) !== '')) === 0) continue;
@@ -322,6 +363,18 @@ if ($method === 'POST' && $action === 'preview') {
             cm_json_error('Too many rows (' . count($parsedRows) . '). Please split into files of ' . CM_IMPORT_MAX_ROWS . ' rows or fewer.', 422);
         }
 
+        // Explicit, visible check for any expected column that never got
+        // recognized from the file's header row (not even via
+        // CM_IMPORT_HEADER_ALIASES) — this is the exact failure mode that
+        // previously happened silently: a mismatched header meant that
+        // whole column came through as blank for every row, with no error
+        // anywhere, because "blank" is indistinguishable from
+        // "intentionally not provided" once the value is gone. Surfacing
+        // this in the preview response means it can never fail silently
+        // again, even for a header variant not already in the alias list.
+        $recognizedKeys = array_keys($parsedRows[0]);
+        $unrecognizedExpectedColumns = array_values(array_diff(CM_IMPORT_HEADERS, $recognizedKeys));
+
         $schemeStmt = $db->query('SELECT name FROM cm_scheme_types');
         $validSchemeNames = array_column($schemeStmt->fetchAll(), 'name');
         [$existingUens, $existingCertNumbers] = cm_preload_import_lookups($db);
@@ -343,13 +396,40 @@ if ($method === 'POST' && $action === 'preview') {
         $summary = ['total' => count($results), 'valid' => 0, 'info' => 0, 'error' => 0];
         foreach ($results as $r) { $summary[$r['status']]++; }
 
-        cm_json_response(['token' => $token, 'rows' => $results, 'summary' => $summary]);
+        cm_json_response([
+            'token' => $token,
+            'rows' => $results,
+            'summary' => $summary,
+            'unrecognized_columns_warning' => $unrecognizedExpectedColumns
+                ? 'These expected columns were NOT found in your file\'s header row (checked exact names and known aliases like "UEN"/"Scheme"): '
+                    . implode(', ', $unrecognizedExpectedColumns)
+                    . '. Every row will import with these fields BLANK — check your file\'s column headers before committing, not after.'
+                : null,
+        ]);
     } catch (\RuntimeException $e) {
         cm_json_error($e->getMessage(), 422);
     } catch (\Throwable $e) {
         error_log('cm import.php preview exception: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
         cm_json_error('Server error during preview: ' . $e->getMessage(), 500);
     }
+}
+
+/**
+ * Same entity-derivation rule already used for the one-time backfill:
+ * SAC -> EHS; IAS, SIS, AxisCert -> Axiscert (SIS operates under IAS,
+ * which trades as Axiscert). Anything else (JAS-ANZ, blank) -> EHS.
+ * Kept as its own small function rather than inlined, since it now gets
+ * called from two places below (new client creation, and the
+ * upgrade-on-match check for an existing client).
+ */
+function cm_derive_entity_from_accreditation_body(?string $accreditationBody): string
+{
+    if ($accreditationBody === null) return 'EHS';
+    $body = strtoupper($accreditationBody);
+    if (str_contains($body, 'IAS') || str_contains($body, 'SIS') || str_contains($body, 'AXIS')) {
+        return 'Axiscert';
+    }
+    return 'EHS';
 }
 
 if ($method === 'POST' && $action === 'commit') {
@@ -414,9 +494,9 @@ if ($method === 'POST' && $action === 'commit') {
             if ($clientId === null) {
                 $insertClient = $db->prepare(
                     'INSERT INTO cm_clients (company_name, uen_registration_no, industry_sector, address, contact_person,
-                        contact_designation, consultant, phone, email, website, status, notes)
+                        contact_designation, consultant, phone, email, website, status, entity, notes)
                      VALUES (:company_name, :uen_registration_no, :industry_sector, :address, :contact_person,
-                        :contact_designation, :consultant, :phone, :email, :website, :status, :notes)'
+                        :contact_designation, :consultant, :phone, :email, :website, :status, :entity, :notes)'
                 );
                 $insertClient->execute([
                     'company_name' => $d['company_name'], 'uen_registration_no' => $d['uen_registration_no'],
@@ -424,13 +504,26 @@ if ($method === 'POST' && $action === 'commit') {
                     'contact_person' => $d['contact_person'], 'contact_designation' => $d['contact_designation'],
                     'consultant' => $d['consultant'],
                     'phone' => $d['phone'], 'email' => $d['email'], 'website' => $d['website'],
-                    'status' => $d['client_status'], 'notes' => $d['notes'],
+                    'status' => $d['client_status'],
+                    'entity' => cm_derive_entity_from_accreditation_body($d['accreditation_body']),
+                    'notes' => $d['notes'],
                 ]);
                 $clientId = (int) $db->lastInsertId();
                 $createdClients++;
                 cm_log_activity($user['id'], 'bulk_import_client', 'cm_client', $clientId, $d['company_name']);
             } else {
                 $matchedClients++;
+                // Upgrade-only: a client with an EARLIER row indicating EHS
+                // (or nothing yet) but a LATER row indicating Axiscert
+                // should end up Axiscert overall — matching the same "any
+                // Axiscert-indicating cert makes the whole client Axiscert"
+                // rule the one-time backfill used. Never downgrades an
+                // already-Axiscert client back to EHS from a later
+                // SAC/JAS-ANZ/blank row.
+                if (cm_derive_entity_from_accreditation_body($d['accreditation_body']) === 'Axiscert') {
+                    $upgradeEntityStmt = $db->prepare("UPDATE cm_clients SET entity = 'Axiscert' WHERE id = :id AND entity != 'Axiscert'");
+                    $upgradeEntityStmt->execute(['id' => $clientId]);
+                }
             }
 
             if ($d['scheme_type_name'] !== null) {
