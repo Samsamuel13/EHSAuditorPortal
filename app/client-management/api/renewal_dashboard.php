@@ -43,6 +43,60 @@ if ($method === 'PUT') {
 
 $user = ehs_require_role(['super_admin', 'admin'], true);
 
+if ($method === 'GET' && trim((string) ($_GET['view'] ?? '')) === 'monthly_stats_detail') {
+    // ------------------------------------------------------------
+    // Drill-down rows behind one monthly-stats metric (2026-09 feature,
+    // added after the summary tab above was already built). Its own
+    // branch, its own gate — does not touch the monthly_stats or plain-GET
+    // branches below it at all. Called lazily by the frontend only when a
+    // stat/row is actually clicked to expand, not on initial tab load.
+    $args = [
+        'metric' => $_GET['metric'] ?? '',
+        'group_by' => $_GET['group_by'] ?? '',
+        'key' => $_GET['key'] ?? '',
+        'milestone' => $_GET['milestone'] ?? '',
+        'status_bucket' => $_GET['status_bucket'] ?? '',
+        'month' => $_GET['month'] ?? '',
+        'date_from' => $_GET['date_from'] ?? '',
+        'date_to' => $_GET['date_to'] ?? '',
+        'scheme_category' => $_GET['scheme_category'] ?? '',
+        'consultant' => $_GET['consultant'] ?? '',
+        'entity' => $_GET['entity'] ?? '',
+        'client_status' => $_GET['client_status'] ?? '',
+        'page' => $_GET['page'] ?? 1,
+        'per_page' => $_GET['per_page'] ?? 25,
+    ];
+    try {
+        $detail = cm_build_monthly_stats_detail($db, $args);
+    } catch (InvalidArgumentException $e) {
+        cm_json_error($e->getMessage(), 422);
+    }
+    cm_json_response($detail);
+}
+
+if ($method === 'GET' && trim((string) ($_GET['view'] ?? '')) === 'monthly_stats') {
+    // ------------------------------------------------------------
+    // Month-wise micro-stats (2026-09 feature) — a SEPARATE branch, gated
+    // on ?view=monthly_stats, so the plain GET below (no view param) is
+    // completely untouched: same WHERE clauses, same response shape, same
+    // behavior for every existing caller (cm_renewal_dashboard.js's default
+    // load, and any other future one). Live auto-expire runs here too, for
+    // the same reason it runs below — so this tab's "expired" count is
+    // truthful the moment the tab is opened, not stale until the next cron.
+    cm_auto_expire_overdue_certifications($db);
+
+    $stats = cm_build_monthly_stats($db, [
+        'month' => $_GET['month'] ?? '',
+        'date_from' => $_GET['date_from'] ?? '',
+        'date_to' => $_GET['date_to'] ?? '',
+        'scheme_category' => $_GET['scheme_category'] ?? '',
+        'consultant' => $_GET['consultant'] ?? '',
+        'entity' => $_GET['entity'] ?? '',
+        'client_status' => $_GET['client_status'] ?? '',
+    ]);
+    cm_json_response($stats);
+}
+
 if ($method === 'GET') {
     // Live auto-expire: keeps the Status column truthful on every load, not
     // just after a daily cron run. Cheap single UPDATE, safe to run per-request.

@@ -35,6 +35,7 @@
  *   Client Management: cm_index, cm_client_detail, renewal_dashboard,
  *              audit_extract, cm_import
  *   CRM: crm_board, crm_list, crm_lead_detail
+ *   Invoices: inv_home, inv_parties, inv_settings  (super_admin only)
  */
 
 $role = $user['role'] ?? 'auditor';
@@ -43,7 +44,12 @@ $activePage = $activePage ?? '';
 
 $cmPages = ['cm_index', 'cm_client_detail', 'renewal_dashboard', 'audit_extract', 'cm_import'];
 $crmPages = ['crm_board', 'crm_list', 'crm_lead_detail'];
+$navInvPages = ['inv_home', 'inv_parties', 'inv_settings'];
+$navInvVisible = $role === 'super_admin';
 $currentApp = in_array($activePage, $cmPages, true) ? 'cm' : (in_array($activePage, $crmPages, true) ? 'crm' : 'scheduler');
+if ($navInvVisible && in_array($activePage, $navInvPages, true)) {
+    $currentApp = 'inv';
+}
 
 $schedulerHome = $isAdmin ? ehs_url('admin/index.php') : ehs_url('auditor/index.php');
 ?>
@@ -115,6 +121,9 @@ $schedulerHome = $isAdmin ? ehs_url('admin/index.php') : ehs_url('auditor/index.
         <a class="app-switcher-btn <?= $currentApp === 'cm' ? 'active' : '' ?>" href="<?= ehs_url('client-management/index.php') ?>">📋 Client Management</a>
         <a class="app-switcher-btn <?= $currentApp === 'crm' ? 'active' : '' ?>" href="<?= ehs_url('crm/index.php') ?>">🎯 CRM</a>
         <?php endif; ?>
+        <?php if ($navInvVisible): ?>
+        <a class="app-switcher-btn <?= $currentApp === 'inv' ? 'active' : '' ?>" href="<?= ehs_url('invoice-system/index.php') ?>" title="Invoices">🧾 <span class="label">Invoices</span></a>
+        <?php endif; ?>
     </nav>
     <button class="app-mobile-toggle" id="app-sidebar-toggle" aria-label="Toggle navigation">☰</button>
     <div class="app-topbar-user">
@@ -154,6 +163,12 @@ $schedulerHome = $isAdmin ? ehs_url('admin/index.php') : ehs_url('auditor/index.
             <div class="app-sidebar-title">CRM</div>
             <a href="<?= ehs_url('crm/index.php') ?>" class="<?= $activePage === 'crm_board' ? 'active' : '' ?>">Board</a>
             <a href="<?= ehs_url('crm/list.php') ?>" class="<?= $activePage === 'crm_list' ? 'active' : '' ?>">List</a>
+
+        <?php elseif ($currentApp === 'inv'): ?>
+            <div class="app-sidebar-title">Invoices</div>
+            <a href="<?= ehs_url('invoice-system/index.php') ?>" class="<?= $activePage === 'inv_home' ? 'active' : '' ?>">Overview</a>
+            <a href="<?= ehs_url('invoice-system/parties.php') ?>" class="<?= $activePage === 'inv_parties' ? 'active' : '' ?>">Billed Parties</a>
+            <a href="<?= ehs_url('invoice-system/settings.php') ?>" class="<?= $activePage === 'inv_settings' ? 'active' : '' ?>">Settings</a>
         <?php endif; ?>
     </aside>
 

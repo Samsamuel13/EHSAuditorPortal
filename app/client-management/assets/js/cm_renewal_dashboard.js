@@ -378,3 +378,370 @@ document.addEventListener('DOMContentLoaded', function () {
         .then(data => { thresholds = data.thresholds || thresholds; initThresholdInputs(); render(data); })
         .catch(() => showToast('Could not load the renewal dashboard.', true));
 });
+
+
+/**
+ * Monthly Stats tab (2026-09 feature; 2026-09 layout rework) — a SEPARATE
+ * DOMContentLoaded listener, deliberately not merged into the block above:
+ * it doesn't touch any existing variable, function, or element from the
+ * renewal-dashboard logic, so nothing above this point had to change to
+ * add or rework this tab.
+ *
+ * Layout rework: every card (the 4+4 tiles, and the 3 Due-milestone chips
+ * that stand in for a tile Due This Range doesn't have) now opens its
+ * breakdown/detail inline, directly below the cards section, in one of two
+ * shared panels (#ms-breakdown-panel for aggregate tables, #ms-detail-panel
+ * for row-level records) — replacing the 6 tables that used to render
+ * permanently further down the page.
+ */
+document.addEventListener('DOMContentLoaded', function () {
+    const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
+    const API_BASE = window.EHS_BASE_URL + '/client-management/api';
+
+    const tabBtnRenewal = document.getElementById('tab-btn-renewal');
+    const tabBtnStats = document.getElementById('tab-btn-monthly-stats');
+    const panelRenewal = document.getElementById('tab-panel-renewal');
+    const panelStats = document.getElementById('tab-panel-monthly-stats');
+    if (!tabBtnRenewal || !tabBtnStats || !panelRenewal || !panelStats) return; // defensive — page markup not present
+
+    let statsLoaded = false;
+
+    function showTab(which) {
+        const onStats = which === 'stats';
+        tabBtnRenewal.classList.toggle('active', !onStats);
+        tabBtnStats.classList.toggle('active', onStats);
+        panelRenewal.classList.toggle('hidden', onStats);
+        panelStats.classList.toggle('hidden', !onStats);
+        if (onStats && !statsLoaded) {
+            statsLoaded = true;
+            loadMonthlyStats();
+        }
+    }
+    tabBtnRenewal.addEventListener('click', () => showTab('renewal'));
+    tabBtnStats.addEventListener('click', () => showTab('stats'));
+
+    function escapeHtml(str) {
+        const div = document.createElement('div');
+        div.textContent = str == null ? '' : str;
+        return div.innerHTML;
+    }
+
+    function currentMonthValue() {
+        const d = new Date();
+        return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+    }
+    document.getElementById('ms-filter-month').value = currentMonthValue();
+
+    function statsFilterParams() {
+        const params = {
+            scheme_category: document.getElementById('ms-filter-scheme-category').value,
+            entity: document.getElementById('ms-filter-entity').value,
+            consultant: document.getElementById('ms-filter-consultant').value,
+            client_status: document.getElementById('ms-filter-client-status').value,
+        };
+        const dateFrom = document.getElementById('ms-filter-date-from').value;
+        const dateTo = document.getElementById('ms-filter-date-to').value;
+        if (dateFrom && dateTo) {
+            params.date_from = dateFrom;
+            params.date_to = dateTo;
+        } else {
+            params.month = document.getElementById('ms-filter-month').value || currentMonthValue();
+        }
+        return params;
+    }
+
+    function populateConsultantOptions(consultants) {
+        const sel = document.getElementById('ms-filter-consultant');
+        const current = sel.value;
+        // Rebuild only if the option count actually changed, so an in-progress
+        // selection isn't reset on every reload.
+        if (sel.dataset.optionsCount == String((consultants || []).length)) return;
+        sel.innerHTML = '<option value="">All consultants</option>' +
+            (consultants || []).map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+        sel.dataset.optionsCount = String((consultants || []).length);
+        if (current) sel.value = current;
+    }
+
+    let lastStatsData = null; // the full monthly_stats response, kept so the breakdown panel can re-render from it without an extra request
+
+    function loadMonthlyStats() {
+        const params = new URLSearchParams(statsFilterParams());
+        params.set('view', 'monthly_stats');
+        fetch(API_BASE + '/renewal_dashboard.php?' + params.toString())
+            .then(r => r.json().then(body => ({ ok: r.ok, body })))
+            .then(({ ok, body }) => {
+                if (!ok) { showToast(body.error || 'Could not load monthly stats.', true); return; }
+                lastStatsData = body;
+                renderMonthlyStats(body);
+                // A filter change should refresh whatever's currently open
+                // inline too, not just the tiles — otherwise the breakdown/
+                // detail panels would silently keep showing the previous
+                // filter's rows.
+                if (currentBreakdown) openBreakdown(currentBreakdown.type, currentBreakdown, true);
+                if (currentDrill && !document.getElementById('ms-detail-panel').classList.contains('hidden')) { detailPage = 1; loadDetail(); }
+            })
+            .catch(() => showToast('Could not load monthly stats.', true));
+    }
+
+    function renderMonthlyStats(data) {
+        document.getElementById('ms-range-label').textContent = data.range.label;
+        document.getElementById('ms-new-clients').textContent = data.new_clients;
+        document.getElementById('ms-certs-issued').textContent = data.certifications_issued;
+        document.getElementById('ms-certs-renewed').textContent = data.certifications_renewed;
+        document.getElementById('ms-certs-expired').textContent = data.certifications_expired;
+        document.getElementById('ms-activity-total').textContent = data.followup_activity.total;
+        document.getElementById('ms-followups-actioned').textContent = data.followups_actioned.total;
+        document.getElementById('ms-avg-resolution').textContent = data.followups_actioned.avg_days_to_resolution ?? '—';
+        document.getElementById('ms-avg-renewal').textContent = data.avg_time_to_renewal_days ?? '—';
+
+        populateConsultantOptions(data.filter_options && data.filter_options.consultants);
+
+        ['surveillance_1', 'surveillance_2', 'recertification'].forEach(k => {
+            const el = document.getElementById('ms-due-chip-' + k);
+            if (el) el.textContent = (data.due_breakdown[k] || {}).due_total ?? '—';
+        });
+    }
+
+    // ---------------- Shared breakdown panel (aggregate tables) ----------------
+    const breakdownPanel = document.getElementById('ms-breakdown-panel');
+    let currentBreakdown = null; // { type, milestone?, subDimension? }
+
+    const BREAKDOWN_TITLES = {
+        certifications_issued: 'Certifications Issued — Breakdown',
+        followup_activity: 'Follow-up Activity — by Type',
+        followups_actioned: 'Follow-ups Actioned — by Stage / Resolution',
+        due_breakdown: 'Due This Range',
+    };
+
+    function openBreakdown(type, opts, isRefresh) {
+        opts = opts || {};
+        currentBreakdown = { type, milestone: opts.milestone, subDimension: opts.subDimension || 'scheme' };
+        document.getElementById('ms-detail-panel').classList.add('hidden'); // one thing open at a time, keeps the page from growing unbounded
+        currentDrill = null;
+        breakdownPanel.classList.remove('hidden');
+        document.getElementById('ms-breakdown-title').textContent = type === 'due_breakdown'
+            ? `Due This Range — ${(lastStatsData.due_breakdown[opts.milestone] || {}).label || opts.milestone}`
+            : BREAKDOWN_TITLES[type];
+        if (!isRefresh) breakdownPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        renderBreakdown();
+    }
+    document.getElementById('ms-breakdown-close').addEventListener('click', () => {
+        breakdownPanel.classList.add('hidden');
+        currentBreakdown = null;
+    });
+
+    function keyValueRowsHtml(obj, metric, groupBy) {
+        const keys = Object.keys(obj || {});
+        if (!keys.length) return '<tr><td style="color:#9ca3af;">No data for this range/filter combination.</td></tr>';
+        return keys.map(k =>
+            `<tr class="cm-drill-row" data-metric="${escapeHtml(metric)}" data-group-by="${escapeHtml(groupBy)}" data-key="${escapeHtml(k)}" title="Click to see the underlying rows"><td>${escapeHtml(k)}</td><td>${escapeHtml(String(obj[k]))}</td></tr>`
+        ).join('');
+    }
+
+    function wireDrillRows(container) {
+        container.querySelectorAll('.cm-drill-row').forEach(tr => {
+            tr.addEventListener('click', () => openDetail({
+                metric: tr.dataset.metric, group_by: tr.dataset.groupBy, key: tr.dataset.key,
+                title: `${tr.children[0].textContent} (${tr.children[1].textContent})`,
+            }));
+        });
+    }
+
+    function renderBreakdown() {
+        if (!currentBreakdown || !lastStatsData) return;
+        const { type, milestone, subDimension } = currentBreakdown;
+        const head = document.getElementById('ms-breakdown-head');
+        const body = document.getElementById('ms-breakdown-body');
+        const subtabsEl = document.getElementById('ms-breakdown-subtabs');
+
+        if (type === 'certifications_issued') {
+            subtabsEl.classList.remove('hidden');
+            const dims = [['scheme', 'By Scheme'], ['status', 'By Status'], ['consultant', 'By Consultant']];
+            subtabsEl.innerHTML = dims.map(([dim, label]) =>
+                `<button type="button" class="cm-breakdown-subtab-btn${dim === subDimension ? ' active' : ''}" data-dim="${dim}">${label}</button>`
+            ).join('');
+            subtabsEl.querySelectorAll('.cm-breakdown-subtab-btn').forEach(btn => {
+                btn.addEventListener('click', () => { currentBreakdown.subDimension = btn.dataset.dim; renderBreakdown(); });
+            });
+            const dataMap = { scheme: lastStatsData.by_scheme_type, status: lastStatsData.by_status, consultant: lastStatsData.by_consultant };
+            head.innerHTML = '';
+            body.innerHTML = keyValueRowsHtml(dataMap[subDimension], 'certifications_issued', subDimension);
+            wireDrillRows(body);
+            return;
+        }
+
+        subtabsEl.classList.add('hidden');
+        subtabsEl.innerHTML = '';
+
+        if (type === 'followup_activity') {
+            head.innerHTML = '';
+            body.innerHTML = keyValueRowsHtml(lastStatsData.followup_activity.by_type, 'followup_activity', 'type');
+            wireDrillRows(body);
+            return;
+        }
+
+        if (type === 'followups_actioned') {
+            head.innerHTML = '';
+            const stageRows = Object.entries(lastStatsData.followups_actioned.by_stage || {}).map(([k, v]) =>
+                `<tr class="cm-drill-row" data-metric="followups_actioned" data-group-by="stage" data-key="${escapeHtml(k)}"><td>${escapeHtml(k)}</td><td>${v}</td></tr>`);
+            const resolutionRows = Object.entries(lastStatsData.followups_actioned.by_resolution || {}).map(([k, v]) =>
+                `<tr class="cm-drill-row" data-metric="followups_actioned" data-group-by="resolution" data-key="${escapeHtml(k)}"><td>Resolution: ${escapeHtml(k)}</td><td>${v}</td></tr>`);
+            const allRows = stageRows.concat(resolutionRows);
+            body.innerHTML = allRows.length ? allRows.join('') : '<tr><td colspan="2" style="color:#9ca3af;">No data for this range/filter combination.</td></tr>';
+            wireDrillRows(body);
+            return;
+        }
+
+        if (type === 'due_breakdown') {
+            const d = lastStatsData.due_breakdown[milestone];
+            head.innerHTML = '<tr><th>Due (total)</th><th>Done</th><th>Incomplete — Overdue</th><th>Incomplete — Not Yet Due</th></tr>';
+            if (!d) {
+                body.innerHTML = '<tr><td colspan="4" style="color:#9ca3af;">No data for this range/filter combination.</td></tr>';
+                return;
+            }
+            body.innerHTML = `<tr>
+                <td class="cm-drill-cell" style="cursor:pointer;" data-status-bucket="" title="Click to see all rows due this range">${d.due_total}</td>
+                <td class="cm-due-done cm-drill-cell" style="cursor:pointer;" data-status-bucket="done" title="Click to see the done rows">${d.done}</td>
+                <td class="cm-due-overdue cm-drill-cell" style="cursor:pointer;" data-status-bucket="overdue" title="Click to see the overdue rows">${d.incomplete_overdue}</td>
+                <td class="cm-due-pending cm-drill-cell" style="cursor:pointer;" data-status-bucket="pending" title="Click to see the not-yet-due rows">${d.incomplete_pending}</td>
+            </tr>`;
+            body.querySelectorAll('.cm-drill-cell').forEach(td => {
+                td.addEventListener('click', () => {
+                    const statusBucket = td.dataset.statusBucket;
+                    const bucketLabel = statusBucket === 'done' ? 'Done' : statusBucket === 'overdue' ? 'Incomplete — Overdue' : statusBucket === 'pending' ? 'Incomplete — Not Yet Due' : 'All Due';
+                    openDetail({ metric: 'due_breakdown', milestone, status_bucket: statusBucket, title: `${d.label} — ${bucketLabel}` });
+                });
+            });
+        }
+    }
+
+    // Tiles that open the breakdown panel. The 3 due-milestone cards
+    // (2026-09: promoted from small chips to full tiles) carry a
+    // data-milestone attribute alongside data-breakdown="due_breakdown";
+    // every other breakdown tile has no data-milestone, so this stays a
+    // single wiring block rather than a separate one per tile shape.
+    document.querySelectorAll('.cm-breakdown-trigger[data-breakdown]').forEach(el => {
+        el.addEventListener('click', () => {
+            openBreakdown(el.dataset.breakdown, el.dataset.milestone ? { milestone: el.dataset.milestone } : undefined);
+        });
+    });
+
+    // ---------------- Row-level drill-down detail panel ----------------
+    const METRIC_COLUMNS = {
+        new_clients: [['company_name', 'Company'], ['entity', 'Entity'], ['consultant', 'Consultant'], ['status', 'Status'], ['industry_sector', 'Industry'], ['first_cert_date', 'First Certification Date']],
+        certifications_issued: [['company_name', 'Company'], ['scheme_name', 'Scheme'], ['scheme_category', 'Category'], ['consultant', 'Consultant'], ['cert_status', 'Status'], ['certificate_number', 'Cert #'], ['issue_date', 'Issue Date'], ['expiry_date', 'Expiry Date']],
+        certifications_renewed: [['company_name', 'Company'], ['scheme_name', 'Scheme'], ['scheme_category', 'Category'], ['cert_status', 'Status'], ['certificate_number', 'Cert #'], ['recertification_completed_at', 'Renewed At']],
+        certifications_expired: [['company_name', 'Company'], ['scheme_name', 'Scheme'], ['scheme_category', 'Category'], ['certificate_number', 'Cert #'], ['expiry_date', 'Expiry Date']],
+        followup_activity: [['company_name', 'Company'], ['activity_type', 'Type'], ['note', 'Note'], ['outcome', 'Outcome'], ['status_changed_to', 'Status Changed To'], ['milestone_completed', 'Milestone Completed'], ['created_by_name', 'Logged By'], ['created_at', 'Logged At']],
+        followups_actioned: [['company_name', 'Company'], ['scheme_name', 'Scheme'], ['milestone_key', 'Milestone'], ['stage', 'Stage'], ['resolution_type', 'Resolution'], ['milestone_date', 'Milestone Date'], ['followed_up_at', 'Actioned At'], ['followed_up_by_name', 'Actioned By']],
+        due_breakdown: [['company_name', 'Company'], ['scheme_name', 'Scheme'], ['cert_status', 'Cert Status'], ['milestone_date', 'Due Date'], ['completed_at', 'Completed At']],
+    };
+
+    let currentDrill = null; // { metric, group_by, key, milestone, status_bucket, title }
+    let detailPage = 1;
+
+    const detailPanel = document.getElementById('ms-detail-panel');
+
+    function openDetail(drill) {
+        currentDrill = drill;
+        detailPage = 1;
+        document.getElementById('ms-detail-title').textContent = drill.title || 'Detail';
+        detailPanel.classList.remove('hidden');
+        detailPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        loadDetail();
+    }
+    document.getElementById('ms-detail-close').addEventListener('click', () => {
+        detailPanel.classList.add('hidden');
+        currentDrill = null;
+    });
+
+    function loadDetail() {
+        if (!currentDrill) return;
+        const params = new URLSearchParams(statsFilterParams());
+        params.set('view', 'monthly_stats_detail');
+        params.set('metric', currentDrill.metric);
+        if (currentDrill.group_by) params.set('group_by', currentDrill.group_by);
+        if (currentDrill.key) params.set('key', currentDrill.key);
+        if (currentDrill.milestone) params.set('milestone', currentDrill.milestone);
+        if (currentDrill.status_bucket) params.set('status_bucket', currentDrill.status_bucket);
+        params.set('page', detailPage);
+        params.set('per_page', 25);
+
+        fetch(API_BASE + '/renewal_dashboard.php?' + params.toString())
+            .then(r => r.json().then(body => ({ ok: r.ok, body })))
+            .then(({ ok, body }) => {
+                if (!ok) { showToast(body.error || 'Could not load the detail rows.', true); return; }
+                renderDetail(body);
+            })
+            .catch(() => showToast('Could not load the detail rows.', true));
+    }
+
+    function renderDetail(data) {
+        const cols = METRIC_COLUMNS[data.metric] || [];
+        const head = document.getElementById('ms-detail-head');
+        head.innerHTML = cols.map(([, label]) => `<th>${escapeHtml(label)}</th>`).join('');
+
+        const body = document.getElementById('ms-detail-body');
+        const rows = data.rows || [];
+        document.getElementById('ms-detail-empty').classList.toggle('hidden', rows.length > 0);
+        body.innerHTML = rows.map(row => '<tr>' + cols.map(([key]) => `<td>${escapeHtml(row[key] == null ? '—' : String(row[key]))}</td>`).join('') + '</tr>').join('');
+
+        const paginationEl = document.getElementById('ms-detail-pagination');
+        if (!data.total_pages || data.total_pages <= 1) {
+            paginationEl.innerHTML = '';
+            return;
+        }
+        paginationEl.innerHTML = `
+            <button class="btn btn-ghost-light btn-small" style="width:auto;" ${data.page <= 1 ? 'disabled' : ''} id="ms-detail-page-prev">‹ Prev</button>
+            <span>Page ${data.page} of ${data.total_pages} (${data.total_count} total)</span>
+            <button class="btn btn-ghost-light btn-small" style="width:auto;" ${data.page >= data.total_pages ? 'disabled' : ''} id="ms-detail-page-next">Next ›</button>
+        `;
+        const prevBtn = document.getElementById('ms-detail-page-prev');
+        const nextBtn = document.getElementById('ms-detail-page-next');
+        if (prevBtn) prevBtn.addEventListener('click', () => { detailPage = data.page - 1; loadDetail(); });
+        if (nextBtn) nextBtn.addEventListener('click', () => { detailPage = data.page + 1; loadDetail(); });
+    }
+
+    // Tile clicks with no aggregate breakdown of their own (New Clients /
+    // Renewed / Expired) — go straight to row-level detail, opened inline
+    // right below the cards, same as everything else.
+    document.querySelectorAll('.cm-drill[data-metric]').forEach(tile => {
+        tile.addEventListener('click', () => {
+            breakdownPanel.classList.add('hidden');
+            currentBreakdown = null;
+            const metric = tile.dataset.metric;
+            const label = tile.querySelector('.cm-stats-tile-label').textContent;
+            openDetail({ metric, title: label });
+        });
+    });
+
+    // ---------------- Filters / export (unchanged behavior) ----------------
+    ['ms-filter-month', 'ms-filter-date-from', 'ms-filter-date-to', 'ms-filter-scheme-category', 'ms-filter-entity', 'ms-filter-consultant', 'ms-filter-client-status'].forEach(id => {
+        document.getElementById(id).addEventListener('change', loadMonthlyStats);
+    });
+    document.getElementById('ms-filter-clear').addEventListener('click', () => {
+        document.getElementById('ms-filter-month').value = currentMonthValue();
+        document.getElementById('ms-filter-date-from').value = '';
+        document.getElementById('ms-filter-date-to').value = '';
+        document.getElementById('ms-filter-scheme-category').value = '';
+        document.getElementById('ms-filter-entity').value = '';
+        document.getElementById('ms-filter-consultant').value = '';
+        document.getElementById('ms-filter-client-status').value = '';
+        loadMonthlyStats();
+    });
+
+    function triggerExport(format) {
+        const params = new URLSearchParams(statsFilterParams());
+        params.set('format', format);
+        // A plain navigation (not fetch) so the browser handles the file
+        // download/Content-Disposition itself — same approach the existing
+        // export buttons elsewhere in this module use (plain links/hrefs to
+        // a GET export endpoint), no CSRF header needed since this is a
+        // GET, read-only, auth-gated-by-session request, matching
+        // export_xlsx.php / export_audit_extract.php / export_client_pdf.php.
+        window.location.href = API_BASE + '/export_monthly_stats.php?' + params.toString();
+    }
+    document.getElementById('ms-export-xlsx').addEventListener('click', () => triggerExport('xlsx'));
+    document.getElementById('ms-export-csv').addEventListener('click', () => triggerExport('csv'));
+    document.getElementById('ms-export-pdf').addEventListener('click', () => triggerExport('pdf'));
+});

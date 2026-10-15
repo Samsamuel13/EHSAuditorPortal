@@ -1,0 +1,3 @@
+# Deny all direct web access: this folder holds the quotation stamp image(s).
+# Files here are only read by PHP (embedded into PDFs as base64), never served by URL.
+Require all denied

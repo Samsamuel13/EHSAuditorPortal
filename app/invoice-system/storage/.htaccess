@@ -1,0 +1,3 @@
+# Deny all direct web access: this folder holds code, schema, docs or generated files.
+# Files here are only read by PHP or served through authenticated endpoints.
+Require all denied

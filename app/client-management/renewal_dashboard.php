@@ -75,12 +75,54 @@ $isSuperAdmin = $user['role'] === 'super_admin';
         position: sticky; top: 0; z-index: 1;
         background: #f8f9fc; /* opaque so rows don't show through while scrolling */
     }
+
+    /* Monthly Stats tab (2026-09 feature) — scoped to this page only, same
+       pattern as the rest of this <style> block. Additive: nothing above
+       this comment was changed. */
+    .cm-tabs { display: flex; gap: 4px; border-bottom: 2px solid #e5e7eb; margin-bottom: 16px; }
+    .cm-tab-btn { background: none; border: none; padding: 10px 16px; font-weight: 600; font-size: 0.9rem; color: #6b7280; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; }
+    .cm-tab-btn.active { color: var(--brand, #283891); border-bottom-color: var(--brand, #283891); }
+    .cm-tab-panel.hidden { display: none; }
+    .cm-stats-filter-bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 16px; }
+    .cm-stats-filter-bar select, .cm-stats-filter-bar input { padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.85rem; }
+    .cm-stats-tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+    .cm-stats-tile { background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 14px; }
+    .cm-stats-tile .cm-stats-tile-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: #6b7280; margin-bottom: 4px; }
+    .cm-stats-tile .cm-stats-tile-value { font-size: 1.6rem; font-weight: 700; color: #111827; }
+    .cm-stats-section-title { font-size: 0.95rem; margin: 20px 0 8px; color: var(--muted, #6b7280); text-transform: uppercase; letter-spacing: 0.04em; }
+    table.cm-breakdown-table { border-collapse: collapse; width: 100%; margin-bottom: 6px; }
+    table.cm-breakdown-table th, table.cm-breakdown-table td { border: 1px solid #e5e7eb; padding: 6px 10px; text-align: left; font-size: 0.85rem; }
+    table.cm-breakdown-table th { background: #f8f9fc; }
+    .cm-due-overdue { color: #b91c1c; font-weight: 600; }
+    .cm-due-pending { color: #b45309; font-weight: 600; }
+    .cm-due-done { color: #16a34a; font-weight: 600; }
+
+    /* Card-triggered inline breakdown/detail panels (2026-09 layout rework) */
+    .cm-due-chips { display: flex; gap: 10px; margin-bottom: 6px; flex-wrap: wrap; }
+    .cm-due-chip { background: #fff; border: 1px solid #d1d5db; border-radius: 20px; padding: 7px 14px; font-size: 0.82rem; cursor: pointer; color: #374151; }
+    .cm-due-chip:hover, .cm-breakdown-trigger:hover, .cm-drill:hover { border-color: var(--brand, #283891); }
+    .cm-due-chip.active, .cm-breakdown-trigger.active, .cm-drill.active { outline: 2px solid var(--brand, #283891); }
+    #ms-breakdown-panel, #ms-detail-panel { margin: 16px 0; border: 1px solid #e5e7eb; border-radius: 8px; padding: 14px; background: #fafbfd; }
+    #ms-breakdown-subtabs { display: flex; gap: 6px; }
+    #ms-breakdown-subtabs.hidden { display: none; }
+    .cm-breakdown-subtab-btn { background: #fff; border: 1px solid #d1d5db; border-radius: 6px; padding: 5px 12px; font-size: 0.8rem; cursor: pointer; }
+    .cm-breakdown-subtab-btn.active { background: var(--brand, #283891); color: #fff; border-color: var(--brand, #283891); }
+    .cm-drill-row { cursor: pointer; }
+    .cm-drill-row:hover td { background: #f0f2f8; }
+    .cm-export-btns { display: flex; gap: 8px; margin: 14px 0; }
 </style>
 </head>
 <body>
             <?php $activePage = 'renewal_dashboard'; require __DIR__ . '/../includes/sidebar_nav.php'; ?>
     <main class="app-main page">
         <h1>Renewal Dashboard</h1>
+
+        <div class="cm-tabs">
+            <button type="button" class="cm-tab-btn active" id="tab-btn-renewal">Renewal Dashboard</button>
+            <button type="button" class="cm-tab-btn" id="tab-btn-monthly-stats">Monthly Stats</button>
+        </div>
+
+        <div id="tab-panel-renewal" class="cm-tab-panel">
 
         <div class="filter-bar">
             <input type="text" id="filter-client-name" placeholder="Search client name...">
@@ -236,6 +278,129 @@ $isSuperAdmin = $user['role'] === 'super_admin';
             <div id="results-empty-state" class="mgmt-empty hidden">No certifications match these filters.</div>
         </div>
         <div id="results-pagination" style="display:flex; justify-content:center; align-items:center; gap:10px; margin-top:10px; font-size:0.85rem;"></div>
+
+        </div><!-- /#tab-panel-renewal -->
+
+        <div id="tab-panel-monthly-stats" class="cm-tab-panel hidden">
+            <div class="cm-stats-filter-bar">
+                <label style="font-size:0.8rem; color:#6b7280;">Month
+                    <input type="month" id="ms-filter-month">
+                </label>
+                <span style="color:#9ca3af; font-size:0.8rem;">or custom range:</span>
+                <label style="font-size:0.8rem; color:#6b7280;">From
+                    <input type="date" id="ms-filter-date-from">
+                </label>
+                <label style="font-size:0.8rem; color:#6b7280;">To
+                    <input type="date" id="ms-filter-date-to">
+                </label>
+                <select id="ms-filter-scheme-category">
+                    <option value="">All scheme categories</option>
+                    <option value="ISO">ISO</option>
+                    <option value="BizSafe">BizSafe</option>
+                    <option value="JASANZ">JAS-ANZ</option>
+                    <option value="Other">Other</option>
+                </select>
+                <select id="ms-filter-entity">
+                    <option value="">All entities</option>
+                    <option value="EHS">EHS</option>
+                    <option value="Axiscert">Axiscert</option>
+                </select>
+                <select id="ms-filter-consultant">
+                    <option value="">All consultants</option>
+                </select>
+                <select id="ms-filter-client-status">
+                    <option value="">All client statuses</option>
+                    <option value="active">Active</option>
+                    <option value="suspended">Suspended</option>
+                    <option value="withdrawn">Withdrawn</option>
+                    <option value="blacklisted">Blacklisted</option>
+                </select>
+                <button id="ms-filter-clear" class="btn btn-ghost-light btn-small" style="width:auto;">Clear</button>
+            </div>
+
+            <h2 style="font-size:1rem;" id="ms-range-label">—</h2>
+
+            <div class="cm-export-btns">
+                <button class="btn btn-ghost-light btn-small" style="width:auto;" id="ms-export-xlsx">⬇ Export XLSX</button>
+                <button class="btn btn-ghost-light btn-small" style="width:auto;" id="ms-export-csv">⬇ Export CSV</button>
+                <button class="btn btn-ghost-light btn-small" style="width:auto;" id="ms-export-pdf">⬇ Export PDF</button>
+            </div>
+
+            <!-- 2026-09 layout rework: every card below is clickable, and
+                 clicking ANY of them — including the 3 Due-milestone chips,
+                 which have no single scalar tile of their own — opens its
+                 breakdown (and, from there, row-level detail) in the ONE
+                 shared panel pair directly below this cards section, not in
+                 a fixed table further down the page. Applied uniformly to
+                 all 6 former static tables: Due by Milestone, Issued by
+                 Scheme/Status/Consultant, Follow-up Activity, Followups
+                 Actioned. -->
+            <div class="cm-stats-tiles">
+                <div class="cm-stats-tile cm-drill" data-metric="new_clients" style="cursor:pointer;" title="Click to see the clients behind this number"><div class="cm-stats-tile-label">New Clients Onboarded</div><div class="cm-stats-tile-value" id="ms-new-clients">—</div></div>
+                <div class="cm-stats-tile cm-breakdown-trigger" data-breakdown="certifications_issued" style="cursor:pointer;" title="Click to see this broken down by scheme, status, or consultant"><div class="cm-stats-tile-label">Certifications Issued</div><div class="cm-stats-tile-value" id="ms-certs-issued">—</div></div>
+                <div class="cm-stats-tile cm-drill" data-metric="certifications_renewed" style="cursor:pointer;" title="Click to see the certifications behind this number"><div class="cm-stats-tile-label">Certifications Renewed</div><div class="cm-stats-tile-value" id="ms-certs-renewed">—</div></div>
+                <div class="cm-stats-tile cm-drill" data-metric="certifications_expired" style="cursor:pointer;" title="Click to see the certifications behind this number"><div class="cm-stats-tile-label">Certifications Expired</div><div class="cm-stats-tile-value" id="ms-certs-expired">—</div></div>
+            </div>
+            <div class="cm-stats-tiles">
+                <div class="cm-stats-tile cm-breakdown-trigger" data-breakdown="followup_activity" style="cursor:pointer;" title="Click to see this broken down by activity type"><div class="cm-stats-tile-label">Follow-up Activity Logged</div><div class="cm-stats-tile-value" id="ms-activity-total">—</div></div>
+                <div class="cm-stats-tile cm-breakdown-trigger" data-breakdown="followups_actioned" style="cursor:pointer;" title="Click to see this broken down by stage / resolution"><div class="cm-stats-tile-label">Follow-ups Actioned</div><div class="cm-stats-tile-value" id="ms-followups-actioned">—</div></div>
+                <div class="cm-stats-tile"><div class="cm-stats-tile-label">Avg Days-to-Resolution</div><div class="cm-stats-tile-value" id="ms-avg-resolution">—</div></div>
+                <div class="cm-stats-tile"><div class="cm-stats-tile-label">Avg Time-to-Renewal (days)</div><div class="cm-stats-tile-value" id="ms-avg-renewal">—</div></div>
+            </div>
+
+            <!-- Due This Range (2026-09: elevated from 3 small chips into
+                 full cards, same visual/behavioral pattern as every other
+                 tile above — each is its own clickable .cm-stats-tile that
+                 opens the due_breakdown panel scoped to that one milestone.
+                 IDs kept identical to the old chip IDs (ms-due-chip-*) so
+                 the existing renderMonthlyStats() value-update code needed
+                 no change. -->
+            <div class="cm-stats-tiles" style="grid-template-columns: repeat(3, 1fr);">
+                <div class="cm-stats-tile cm-breakdown-trigger" data-breakdown="due_breakdown" data-milestone="surveillance_1" style="cursor:pointer;" title="Click to see the clients due for Surveillance 1 in this range"><div class="cm-stats-tile-label">Surveillance 1 Due</div><div class="cm-stats-tile-value" id="ms-due-chip-surveillance_1">—</div></div>
+                <div class="cm-stats-tile cm-breakdown-trigger" data-breakdown="due_breakdown" data-milestone="surveillance_2" style="cursor:pointer;" title="Click to see the clients due for Surveillance 2 in this range"><div class="cm-stats-tile-label">Surveillance 2 Due</div><div class="cm-stats-tile-value" id="ms-due-chip-surveillance_2">—</div></div>
+                <div class="cm-stats-tile cm-breakdown-trigger" data-breakdown="due_breakdown" data-milestone="recertification" style="cursor:pointer;" title="Click to see the clients due for Recertification/Expiry in this range"><div class="cm-stats-tile-label">Recert / Expiry Due</div><div class="cm-stats-tile-value" id="ms-due-chip-recertification">—</div></div>
+            </div>
+            <p style="color:var(--muted,#6b7280); margin-top:-4px; font-size:0.8rem;">
+                "Incomplete — overdue" is only possible once the range reaches today; a range entirely in the future will correctly show 0 overdue.
+            </p>
+
+            <!-- Shared breakdown panel (2026-09 layout rework) — directly
+                 below the cards/chips section, ONE location for whichever
+                 card was clicked. Replaces the 6 tables that used to render
+                 permanently further down the page. -->
+            <div id="ms-breakdown-panel" class="hidden">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <h3 id="ms-breakdown-title" style="font-size:0.95rem; margin:0;">Breakdown</h3>
+                    <button id="ms-breakdown-close" class="btn btn-ghost-light btn-small" style="width:auto;">Close</button>
+                </div>
+                <div id="ms-breakdown-subtabs" class="hidden"></div>
+                <table class="cm-breakdown-table" id="ms-breakdown-table">
+                    <thead id="ms-breakdown-head"></thead>
+                    <tbody id="ms-breakdown-body"></tbody>
+                </table>
+            </div>
+
+            <!-- Row-level drill-down detail panel — sits directly below the
+                 breakdown panel (same shared location), opened either
+                 straight from a tile (New Clients / Renewed / Expired, which
+                 have no aggregate breakdown of their own) or from a row
+                 inside the breakdown panel above it. -->
+            <div id="ms-detail-panel" class="hidden">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <h3 id="ms-detail-title" style="font-size:0.95rem; margin:0;">Detail</h3>
+                    <button id="ms-detail-close" class="btn btn-ghost-light btn-small" style="width:auto;">Close</button>
+                </div>
+                <div class="mgmt-table-wrap" style="margin-top:8px;">
+                    <table class="mgmt-table">
+                        <thead><tr id="ms-detail-head"></tr></thead>
+                        <tbody id="ms-detail-body"></tbody>
+                    </table>
+                    <div id="ms-detail-empty" class="mgmt-empty hidden">No rows for this range/filter combination.</div>
+                </div>
+                <div id="ms-detail-pagination" style="display:flex; justify-content:center; align-items:center; gap:10px; margin-top:10px; font-size:0.85rem;"></div>
+            </div>
+        </div><!-- /#tab-panel-monthly-stats -->
+
     </main>
     </div>
 

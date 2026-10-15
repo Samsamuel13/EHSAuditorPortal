@@ -147,3 +147,47 @@ crm/
   lookup used to tag audits) is intentionally separate from
   `client-management/` and not linked to it. Don't merge these or assume
   they share data.
+
+  ## Process & verification discipline
+
+This system holds real client certification data. Apply this discipline in every module —
+cm_, crm_, and the scheduler alike — not just where it's convenient.
+
+### Before implementing
+- Read the actual current schema/files directly — never rely on memory of a prior session,
+  an old export, or a stale .sql dump. If a file you're working from might be outdated
+  relative to the live DB, say so explicitly before using it.
+- Restate your understanding of existing logic back to the user before changing it,
+  especially cycle/rollover logic (cm_), pipeline-stage transitions (crm_), or scheduling
+  conflict logic.
+- Search for existing functionality before building new — this codebase has at least one
+  known half-built feature (cm_renewal_alerts' unused 'acknowledged' status). Don't add a
+  second system that duplicates an existing one; flag the overlap and ask how to resolve it.
+- For anything non-trivial (schema change, bulk data operation, new cross-cutting feature):
+  present a plan and get confirmation before writing code.
+
+### Verification over assumption
+- Treat "this formula looks right" as unverified until checked against real data. Formulas
+  that looked correct have been wrong before (the cm_ cycle-date calculation, corrected
+  twice after review).
+- When two data sources disagree (raw import file vs. live DB, old record vs. new), present
+  both and ask — never silently prefer one.
+- Before finalizing any query with repeated OR-conditions or loop-built conditions, check
+  for duplicate placeholder names (see the recurring-bug note above) — every time, not just
+  when it's top of mind.
+
+### Data-modifying operations
+- Take a backup/export before any operation that writes to the database, and state exactly
+  how to restore it.
+- Log before/after values for any bulk update in a reviewable form (a plain table is fine).
+- Never overwrite a non-blank field as a side effect of an unrelated fix.
+- After any change to dates, statuses, or pipeline stages, check for downstream effects
+  (auto-expiry, renewal follow-up stages, cycle_stage, crm_ stage-history) and report what
+  changed — don't let a backfill or fix silently trigger a wave of new alerts or status
+  changes without saying so upfront.
+
+### After building
+- Walk through concrete test scenarios — boundary dates/values, concurrent-access cases,
+  rollback/undo paths — and show the results. "Done" means verified, not just written.
+- If something questionable turns up in any module while working on something unrelated,
+  say so. Don't quietly work around it or leave it unmentioned for later.

@@ -1,250 +1,256 @@
-// crm/assets/js/crm_lead_detail.js
-document.addEventListener('DOMContentLoaded', function () {
-    const REASON_STAGES = ['lost', 'on_hold'];
-    const leadId = window.CRM_LEAD_ID;
-    let currentLead = null;
-    let pendingStage = null;
+(function () {
+    'use strict';
 
-    function loadLead() {
-        return crmFetch(CRM_API + '/leads.php?id=' + leadId).then(data => {
-            currentLead = data.lead;
-            renderLeadInfo();
-            renderTimeline();
-        }).catch(err => crmToast(err.message, true));
+    const API_BASE = 'api';
+    const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]').content;
+    const LEAD_ID = parseInt(document.querySelector('meta[name="crm-lead-id"]').content, 10);
+
+    const SIDE_STAGES = ['lost', 'on_hold']; // must match crm/includes/crm_helpers.php CRM_SIDE_STAGES
+
+    function escapeHtml(str) {
+        if (str === null || str === undefined) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
     }
 
-    function renderLeadInfo() {
-        const l = currentLead;
-        document.getElementById('ld-company').textContent = l.company_name;
-        document.getElementById('ld-stage-badge').innerHTML =
-            `<span class="badge bg-secondary">${CRM_STAGE_LABELS[l.stage] || l.stage}</span>`;
-        document.getElementById('ld-contact').textContent = l.contact_person || '—';
-        document.getElementById('ld-phone').textContent = l.phone || '—';
-        document.getElementById('ld-email').textContent = l.email || '—';
-        document.getElementById('ld-industry').textContent = l.industry_sector || '—';
-        document.getElementById('ld-source').textContent = CRM_SOURCE_LABELS[l.source] || l.source;
-        document.getElementById('ld-owner').textContent = l.owner_display_name || 'Unassigned';
-        document.getElementById('ld-stage-select').value = l.stage;
-
-        const banner = document.getElementById('ld-converted-banner');
-        if (l.converted_client_id) {
-            banner.classList.remove('d-none');
-            banner.innerHTML = `<i class="bi bi-check-circle"></i> Converted to Client Management ` +
-                `<a href="${window.EHS_BASE_URL}/client-management/client_detail.php?id=${l.converted_client_id}">#${l.converted_client_id}</a>`;
-        } else {
-            banner.classList.add('d-none');
-        }
+    function apiFetch(path, options) {
+        options = options || {};
+        options.headers = Object.assign({
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': CSRF_TOKEN,
+        }, options.headers || {});
+        return fetch(API_BASE + path, options).then(function (r) {
+            if (r.status === 401) {
+                window.location.reload();
+                throw new Error('Session expired');
+            }
+            return r.json().then(function (data) {
+                if (!r.ok) throw new Error(data.error || 'Request failed');
+                return data;
+            });
+        });
     }
 
-    function renderTimeline() {
-        Promise.all([
-            crmFetch(CRM_API + '/followups.php?lead_id=' + leadId),
-            crmFetch(CRM_API + '/quotations.php?lead_id=' + leadId),
-        ]).then(([fuData, qtData]) => {
-            const events = [];
-            (currentLead.stage_history || []).forEach(h => events.push({
-                ts: h.changed_at, type: 'stage',
-                html: `<strong>${h.from_stage ? (CRM_STAGE_LABELS[h.from_stage] + ' &rarr; ') : ''}${CRM_STAGE_LABELS[h.to_stage] || h.to_stage}</strong>` +
-                      (h.reason ? ` — ${crmEscapeHtml(h.reason)}` : '') +
-                      ` <span class="text-muted small">by ${crmEscapeHtml(h.changed_by_name || '—')}</span>`,
-            }));
-            (fuData.followups || []).forEach(f => events.push({
-                ts: f.created_at, type: 'followup',
-                html: `<i class="bi bi-calendar-check"></i> Follow-up scheduled: ${crmEscapeHtml(f.type)} on ${crmEscapeHtml(f.due_date)}` +
-                      (f.note ? ` — ${crmEscapeHtml(f.note)}` : '') +
-                      ` <span class="text-muted small">by ${crmEscapeHtml(f.owner_display_name || '—')}</span>`,
-            }));
-            (qtData.quotations || []).forEach(q => events.push({
-                ts: q.created_at, type: 'quotation',
-                html: `<i class="bi bi-file-earmark-text"></i> Quotation ${crmEscapeHtml(q.quote_number)} created (v${q.version}, ${crmEscapeHtml(q.currency)} ${q.total})` +
-                      ` <span class="text-muted small">by ${crmEscapeHtml(q.created_by_display_name || '—')}</span>`,
-            }));
-            events.sort((a, b) => new Date(b.ts) - new Date(a.ts));
+    // -------------------------------------------------------------------
+    // Owner dropdown (edit modal)
+    // -------------------------------------------------------------------
 
-            document.getElementById('timeline-list').innerHTML = events.length
-                ? events.map(e => `<div class="crm-timeline-item"><div class="small text-muted">${crmEscapeHtml((e.ts || '').substring(0, 16).replace('T', ' '))}</div>${e.html}</div>`).join('')
-                : '<p class="text-muted">No activity yet.</p>';
-
-            renderFollowups(fuData.followups || []);
-            renderQuotations(qtData.quotations || []);
-        }).catch(err => crmToast(err.message, true));
+    function loadOwnerOptions() {
+        const sel = document.getElementById('edit-lead-owner');
+        const current = parseInt(sel.getAttribute('data-current'), 10) || 0;
+        apiFetch('/users_lookup.php').then(function (data) {
+            sel.innerHTML = '<option value="">Unassigned</option>';
+            data.users.forEach(function (u) {
+                const opt = document.createElement('option');
+                opt.value = u.id;
+                opt.textContent = u.name;
+                if (u.id === current) opt.selected = true;
+                sel.appendChild(opt);
+            });
+        }).catch(function () {});
     }
+    loadOwnerOptions();
 
-    function renderFollowups(followups) {
-        document.getElementById('followups-body').innerHTML = followups.map(f => `
-            <tr>
-                <td>${crmEscapeHtml(f.due_date)}</td>
-                <td>${crmEscapeHtml(f.type)}</td>
-                <td>${crmEscapeHtml(f.owner_display_name || '—')}</td>
-                <td>${crmEscapeHtml(f.note || '—')}</td>
-                <td>${f.done ? '<span class="badge bg-success">Done</span>' : (f.due_date < new Date().toISOString().substring(0,10) ? '<span class="badge bg-danger">Overdue</span>' : '<span class="badge bg-warning text-dark">Pending</span>')}</td>
-                <td>${f.done ? '' : `<button class="btn btn-sm btn-outline-success" onclick="crmMarkFollowupDone(${f.id})">Mark done</button>`}</td>
-            </tr>
-        `).join('') || '<tr><td colspan="6" class="text-muted">No follow-ups yet.</td></tr>';
+    // -------------------------------------------------------------------
+    // Edit lead info
+    // -------------------------------------------------------------------
+
+    document.getElementById('edit-lead-btn').addEventListener('click', function () {
+        new bootstrap.Modal(document.getElementById('editLeadModal')).show();
+    });
+
+    document.getElementById('edit-lead-submit').addEventListener('click', function () {
+        const form = document.getElementById('edit-lead-form');
+        if (!form.reportValidity()) return;
+
+        const formData = new FormData(form);
+        const payload = { id: LEAD_ID };
+        formData.forEach(function (value, key) { payload[key] = value; });
+
+        apiFetch('/leads.php', {
+            method: 'PUT',
+            body: JSON.stringify(payload),
+        }).then(function () {
+            // Simplest correct option: full reload, so every displayed field
+            // (including the owner name resolved server-side) reflects the
+            // saved state exactly, rather than duplicating that resolution
+            // logic here.
+            window.location.reload();
+        }).catch(function (err) {
+            alert('Could not save changes: ' + err.message);
+        });
+    });
+
+    // -------------------------------------------------------------------
+    // Stage change
+    // -------------------------------------------------------------------
+
+    const stageSelect = document.getElementById('stage-select');
+    const reasonField = document.getElementById('stage-reason');
+
+    function syncReasonFieldVisibility() {
+        const needsReason = SIDE_STAGES.indexOf(stageSelect.value) !== -1;
+        reasonField.classList.toggle('d-none', !needsReason);
+        document.getElementById('stage-reason-error').classList.add('d-none');
     }
-    window.crmMarkFollowupDone = function (id) {
-        crmFetch(CRM_API + '/followups.php?id=' + id, { method: 'PUT', body: { done: true } })
-            .then(() => { crmToast('Follow-up marked done.'); renderTimeline(); })
-            .catch(err => crmToast(err.message, true));
-    };
+    stageSelect.addEventListener('change', syncReasonFieldVisibility);
+    syncReasonFieldVisibility();
 
-    function renderQuotations(quotations) {
-        document.getElementById('quotations-list').innerHTML = quotations.map(q => `
-            <div class="card mb-2">
-                <div class="card-body py-2">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div><strong>${crmEscapeHtml(q.quote_number)}</strong> (v${q.version})
-                            <span class="badge bg-secondary ms-1">${crmEscapeHtml(q.status)}</span></div>
-                        <div>
-                            <select class="form-select form-select-sm d-inline-block w-auto" onchange="crmUpdateQuoteStatus(${q.id}, this.value)">
-                                ${['draft','sent','accepted','rejected','expired'].map(s => `<option value="${s}" ${s === q.status ? 'selected' : ''}>${s}</option>`).join('')}
-                            </select>
-                            <a class="btn btn-sm btn-outline-primary" href="${CRM_API}/quotation_pdf.php?id=${q.id}"><i class="bi bi-file-pdf"></i> PDF</a>
-                        </div>
-                    </div>
-                    <div class="small text-muted mt-1">Total: ${crmEscapeHtml(q.currency)} ${q.total} &middot; Valid until: ${crmEscapeHtml(q.valid_until || '—')}</div>
-                </div>
-            </div>
-        `).join('') || '<p class="text-muted">No quotations yet.</p>';
-    }
-    window.crmUpdateQuoteStatus = function (id, status) {
-        crmFetch(CRM_API + '/quotations.php?id=' + id, { method: 'PUT', body: { status } })
-            .then(() => { crmToast('Quotation status updated.'); renderTimeline(); })
-            .catch(err => crmToast(err.message, true));
-    };
+    document.getElementById('stage-change-submit').addEventListener('click', function () {
+        const toStage = stageSelect.value;
+        const reason = reasonField.value.trim();
 
-    // --- Stage change ---
-    document.getElementById('btn-change-stage').addEventListener('click', function () {
-        const newStage = document.getElementById('ld-stage-select').value;
-        if (newStage === currentLead.stage) return;
-
-        if (REASON_STAGES.includes(newStage)) {
-            pendingStage = newStage;
-            document.getElementById('reason-modal-title').textContent = 'Reason for moving to ' + CRM_STAGE_LABELS[newStage];
-            document.getElementById('reason-text').value = '';
-            new bootstrap.Modal(document.getElementById('modal-stage-reason')).show();
+        if (SIDE_STAGES.indexOf(toStage) !== -1 && !reason) {
+            document.getElementById('stage-reason-error').classList.remove('d-none');
             return;
         }
-        applyStageChange(newStage, null);
-    });
-    document.getElementById('btn-reason-confirm').addEventListener('click', function () {
-        const reason = document.getElementById('reason-text').value.trim();
-        if (!reason) { crmToast('A reason is required.', true); return; }
-        applyStageChange(pendingStage, reason);
-        bootstrap.Modal.getInstance(document.getElementById('modal-stage-reason')).hide();
-    });
-    function applyStageChange(stage, reason) {
-        const body = { stage };
+
+        const body = { id: LEAD_ID, to_stage: toStage };
         if (reason) body.reason = reason;
-        crmFetch(CRM_API + '/leads.php?id=' + leadId, { method: 'PUT', body }).then(res => {
-            crmToast(res.converted_client_id ? 'Awarded — converted to Client Management #' + res.converted_client_id + '.' : 'Stage updated.');
-            loadLead();
-        }).catch(err => { crmToast(err.message, true); document.getElementById('ld-stage-select').value = currentLead.stage; });
-    }
 
-    // --- Edit lead ---
-    crmLoadOwnersInto(document.getElementById('ed-owner'));
-    document.getElementById('btn-edit-lead').addEventListener('click', function () {
-        const l = currentLead;
-        document.getElementById('ed-company').value = l.company_name || '';
-        document.getElementById('ed-contact').value = l.contact_person || '';
-        document.getElementById('ed-phone').value = l.phone || '';
-        document.getElementById('ed-email').value = l.email || '';
-        document.getElementById('ed-source').value = l.source;
-        document.getElementById('ed-owner').value = l.owner_id || '';
-        document.getElementById('ed-industry').value = l.industry_sector || '';
-        document.getElementById('ed-notes').value = l.notes || '';
-    });
-    document.getElementById('btn-save-edit').addEventListener('click', function () {
-        const body = {
-            company_name: document.getElementById('ed-company').value.trim(),
-            contact_person: document.getElementById('ed-contact').value.trim(),
-            phone: document.getElementById('ed-phone').value.trim(),
-            email: document.getElementById('ed-email').value.trim(),
-            source: document.getElementById('ed-source').value,
-            owner_id: document.getElementById('ed-owner').value || 0,
-            industry_sector: document.getElementById('ed-industry').value.trim(),
-            notes: document.getElementById('ed-notes').value.trim(),
-        };
-        crmFetch(CRM_API + '/leads.php?id=' + leadId, { method: 'PUT', body }).then(() => {
-            bootstrap.Modal.getInstance(document.getElementById('modal-edit-lead')).hide();
-            crmToast('Lead updated.');
-            loadLead();
-        }).catch(err => crmToast(err.message, true));
-    });
-
-    // --- New follow-up ---
-    crmLoadOwnersInto(document.getElementById('fu-owner'));
-    document.getElementById('btn-save-followup').addEventListener('click', function () {
-        const due = document.getElementById('fu-due').value;
-        if (!due) { crmToast('Due date is required.', true); return; }
-        const body = {
-            lead_id: leadId, due_date: due,
-            type: document.getElementById('fu-type').value,
-            owner_id: document.getElementById('fu-owner').value || null,
-            note: document.getElementById('fu-note').value.trim(),
-        };
-        crmFetch(CRM_API + '/followups.php', { method: 'POST', body }).then(() => {
-            bootstrap.Modal.getInstance(document.getElementById('modal-new-followup')).hide();
-            document.getElementById('fu-due').value = '';
-            document.getElementById('fu-note').value = '';
-            crmToast('Follow-up added.');
-            renderTimeline();
-        }).catch(err => crmToast(err.message, true));
-    });
-
-    // --- New quotation ---
-    function addItemRow() {
-        const row = document.createElement('tr');
-        row.innerHTML = `
-            <td><input type="text" class="form-control form-control-sm qt-desc"></td>
-            <td><input type="number" step="0.01" class="form-control form-control-sm qt-qty" value="1"></td>
-            <td><input type="number" step="0.01" class="form-control form-control-sm qt-price" value="0"></td>
-            <td><button class="btn btn-sm btn-outline-danger" onclick="this.closest('tr').remove(); crmRecalcQuoteTotal();">&times;</button></td>
-        `;
-        document.getElementById('qt-items-body').appendChild(row);
-    }
-    document.getElementById('btn-add-item').addEventListener('click', addItemRow);
-    document.getElementById('modal-new-quotation').addEventListener('shown.bs.modal', function () {
-        document.getElementById('qt-items-body').innerHTML = '';
-        addItemRow();
-    });
-    document.getElementById('qt-items-body').addEventListener('input', crmRecalcQuoteTotal);
-    document.getElementById('qt-tax').addEventListener('input', crmRecalcQuoteTotal);
-    window.crmRecalcQuoteTotal = function () {
-        let subtotal = 0;
-        document.querySelectorAll('#qt-items-body tr').forEach(row => {
-            const qty = parseFloat(row.querySelector('.qt-qty').value) || 0;
-            const price = parseFloat(row.querySelector('.qt-price').value) || 0;
-            subtotal += qty * price;
+        apiFetch('/lead_stage.php', {
+            method: 'PUT',
+            body: JSON.stringify(body),
+        }).then(function (result) {
+            if (result.converted_client_id) {
+                alert('Lead awarded — a new client record (#' + result.converted_client_id + ') was created in Client Management.');
+            }
+            window.location.reload();
+        }).catch(function (err) {
+            alert('Could not change stage: ' + err.message);
         });
-        const taxPct = parseFloat(document.getElementById('qt-tax').value) || 0;
-        const total = subtotal + (subtotal * taxPct / 100);
-        document.getElementById('qt-total-preview').textContent = 'Total: SGD ' + total.toFixed(2);
+    });
+
+    // -------------------------------------------------------------------
+    // Activity log (crm_lead_notes)
+    // -------------------------------------------------------------------
+
+    const stageLabels = {
+        enquiry: 'Enquiry', lead: 'Lead', quotation: 'Quotation',
+        negotiation: 'Negotiation', awarded: 'Awarded', lost: 'Lost', on_hold: 'On Hold',
+    };
+    const activityTypeLabels = {
+        whatsapp_sent: 'WhatsApp sent', call: 'Call', email: 'Email',
+        meeting: 'Meeting', site_visit: 'Site visit', other: 'Other',
     };
 
-    document.getElementById('btn-save-quotation').addEventListener('click', function () {
-        const items = [...document.querySelectorAll('#qt-items-body tr')].map(row => ({
-            description: row.querySelector('.qt-desc').value.trim(),
-            qty: parseFloat(row.querySelector('.qt-qty').value) || 0,
-            unit_price: parseFloat(row.querySelector('.qt-price').value) || 0,
-        })).filter(i => i.description);
+    function noteHtml(n) {
+        let extra = '';
+        if (n.stage_changed_to) {
+            extra += `<div class="crm-history-reason">Stage changed to ${escapeHtml(stageLabels[n.stage_changed_to] || n.stage_changed_to)}</div>`;
+        }
+        if (n.outcome) {
+            extra += `<div class="crm-history-reason">Outcome: ${escapeHtml(n.outcome)}</div>`;
+        }
+        let undoBtn = '';
+        if (n.previous_state && !n.reverted_at) {
+            undoBtn = `<button type="button" class="btn btn-outline-secondary btn-sm mt-1 crm-undo-note" data-id="${n.id}">Undo stage change</button>`;
+        } else if (n.reverted_at) {
+            extra += `<div class="crm-history-reason text-muted">Reverted ${escapeHtml(n.reverted_at)}</div>`;
+        }
+        return `
+          <div class="crm-history-item">
+            <strong>${escapeHtml(activityTypeLabels[n.activity_type] || n.activity_type)}</strong>
+            <span class="crm-history-meta">${escapeHtml(n.created_by_display_name || 'Unknown')} · ${escapeHtml(n.created_at)}</span>
+            <div>${escapeHtml(n.note)}</div>
+            ${extra}
+            ${undoBtn}
+          </div>`;
+    }
 
-        if (!items.length) { crmToast('At least one line item with a description is required.', true); return; }
+    function loadNotes() {
+        apiFetch('/lead_notes.php?lead_id=' + LEAD_ID).then(function (data) {
+            const el = document.getElementById('activity-log-list');
+            if (data.notes.length === 0) {
+                el.innerHTML = '<div class="text-muted small">No activity logged yet.</div>';
+                return;
+            }
+            el.innerHTML = data.notes.map(noteHtml).join('');
+            el.querySelectorAll('.crm-undo-note').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    if (!confirm('Undo this activity\'s stage change? The note itself stays on the record.')) return;
+                    apiFetch('/lead_notes.php?id=' + btn.getAttribute('data-id'), {
+                        method: 'PUT',
+                        body: JSON.stringify({ action: 'undo' }),
+                    }).then(function () {
+                        window.location.reload();
+                    }).catch(function (err) {
+                        alert('Could not undo: ' + err.message);
+                    });
+                });
+            });
+        }).catch(function (err) {
+            document.getElementById('activity-log-list').innerHTML =
+                '<div class="text-danger small">Failed to load activity log: ' + escapeHtml(err.message) + '</div>';
+        });
+    }
+    loadNotes();
 
-        const body = {
-            lead_id: leadId,
-            valid_until: document.getElementById('qt-valid-until').value || null,
-            tax_percent: parseFloat(document.getElementById('qt-tax').value) || 0,
-            notes: document.getElementById('qt-notes').value.trim(),
-            items,
-        };
-        crmFetch(CRM_API + '/quotations.php', { method: 'POST', body }).then(() => {
-            bootstrap.Modal.getInstance(document.getElementById('modal-new-quotation')).hide();
-            crmToast('Quotation version created.');
-            loadLead();
-        }).catch(err => crmToast(err.message, true));
+    // -------------------------------------------------------------------
+    // Log Activity modal
+    // -------------------------------------------------------------------
+
+    document.getElementById('log-activity-btn').addEventListener('click', function () {
+        document.getElementById('log-activity-type').value = 'other';
+        document.getElementById('log-new-stage').value = '';
+        document.getElementById('log-reason-wrap').classList.add('d-none');
+        document.getElementById('log-reason').value = '';
+        document.getElementById('log-note').value = '';
+        document.getElementById('log-outcome').value = '';
+        document.getElementById('log-activity-error').classList.add('d-none');
+        new bootstrap.Modal(document.getElementById('logActivityModal')).show();
     });
 
-    loadLead();
-});
+    document.getElementById('log-new-stage').addEventListener('change', function () {
+        const needsReason = SIDE_STAGES.indexOf(this.value) !== -1;
+        document.getElementById('log-reason-wrap').classList.toggle('d-none', !needsReason);
+    });
+
+    document.getElementById('log-activity-submit').addEventListener('click', function () {
+        const note = document.getElementById('log-note').value.trim();
+        const errEl = document.getElementById('log-activity-error');
+        errEl.classList.add('d-none');
+
+        if (!note) {
+            errEl.textContent = 'A note is required.';
+            errEl.classList.remove('d-none');
+            return;
+        }
+
+        const newStage = document.getElementById('log-new-stage').value;
+        const reason = document.getElementById('log-reason').value.trim();
+        if (SIDE_STAGES.indexOf(newStage) !== -1 && !reason) {
+            errEl.textContent = 'A reason is required when changing stage to Lost or On Hold.';
+            errEl.classList.remove('d-none');
+            return;
+        }
+
+        const payload = {
+            lead_id: LEAD_ID,
+            activity_type: document.getElementById('log-activity-type').value,
+            note: note,
+            outcome: document.getElementById('log-outcome').value.trim() || null,
+        };
+        if (newStage) {
+            payload.new_stage = newStage;
+            if (reason) payload.reason = reason;
+        }
+
+        apiFetch('/lead_notes.php', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+        }).then(function (result) {
+            if (result.converted_client_id) {
+                alert('Lead awarded — a new client record (#' + result.converted_client_id + ') was created in Client Management.');
+            }
+            window.location.reload();
+        }).catch(function (err) {
+            errEl.textContent = err.message;
+            errEl.classList.remove('d-none');
+        });
+    });
+})();
